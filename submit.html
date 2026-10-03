@@ -22,9 +22,8 @@
   .btn.alt{background:#fff;color:var(--brand);border:1.5px solid var(--brand)}
   .btn.block{width:100%;margin-top:10px}
   .note{font-size:12px;color:var(--sub);margin-top:8px;line-height:1.6}
-  .store{display:block;width:100%;text-align:left;padding:13px 14px;border:1.5px solid #e5e7eb;border-radius:10px;background:#fff;font-size:15px;margin-bottom:8px;cursor:pointer}
-  .store.on{border-color:var(--brand);background:#fef3c7;font-weight:600}
-  .store .pct{float:right;color:var(--sub);font-size:12px}
+  .target{font-size:19px;font-weight:700;color:var(--brand);line-height:1.4;padding:14px;background:#fef3c7;border-radius:10px;text-align:center;word-break:break-all}
+  .target .pct{display:block;font-size:12px;color:#92400e;font-weight:400;margin-top:6px}
   .ok-note{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:12px;border-radius:10px;font-size:14px;line-height:1.6;margin-top:10px;word-break:break-all}
   .err-note{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px;border-radius:10px;font-size:14px;line-height:1.6;margin-top:10px;word-break:break-all}
   .steps{font-size:13px;color:#374151;line-height:1.9;background:#f3f4f6;border-radius:10px;padding:10px 12px;margin:8px 0}
@@ -32,11 +31,12 @@
   .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:12px;background:#eef2f7;color:#6b7280;margin-left:6px}
   .spin{display:inline-block;width:12px;height:12px;border:2px solid #d1d5db;border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle;margin-right:4px}
   @keyframes sp{to{transform:rotate(360deg)}}
+  .skip-link{display:block;text-align:center;font-size:13px;color:var(--sub);margin-top:10px;text-decoration:underline}
 </style>
 </head>
 <body>
 <h1>🍜 众包美食家 · 手机提交</h1>
-<p class="sub">不用装任何东西。小红书也在这个浏览器里用，复制网址粘贴过来就行。</p>
+<p class="sub">任务由中枢自动分配，你只管采集提交，不用做任何选择。</p>
 
 <!-- ① 身份 -->
 <div class="card" id="card-id">
@@ -51,18 +51,19 @@
   </div>
 </div>
 
-<!-- ② 任务 -->
+<!-- ② 中枢分配的当前目标 -->
 <div class="card hidden" id="card-task">
-  <h2>② 当前任务 <button class="btn alt" id="refresh" style="float:right;padding:6px 12px;font-size:13px">刷新</button></h2>
-  <div id="taskInfo" class="note"></div>
-  <div id="storeList"></div>
+  <h2>② 中枢分配的当前目标 <button class="btn alt" id="refresh" style="float:right;padding:6px 12px;font-size:13px">刷新</button></h2>
+  <div class="target" id="targetBox"><span class="spin"></span>分配中…</div>
+  <div id="taskMeta" class="note"></div>
+  <a class="skip-link" id="skipKw">这家店找不到笔记？换一家（会通知中枢）</a>
 </div>
 
 <!-- ③ 提交 -->
 <div class="card hidden" id="card-submit">
-  <h2>③ 粘贴笔记链接 <span class="pill" id="curStore"></span></h2>
+  <h2>③ 粘贴笔记链接</h2>
   <div class="steps">
-    <b>最简单的方法（推荐）</b>：在本浏览器<b>新开一个标签页</b>打开 <b>m.xiaohongshu.com</b>（登录一次）→ 搜索「<span id="kwEcho"></span>」→ 打开一篇笔记 → <b>直接复制地址栏网址</b> → 回来粘贴。<br>
+    <b>最简单的方法（推荐）</b>：在本浏览器<b>新开一个标签页</b>打开 <b>m.xiaohongshu.com</b>（登录一次）→ 搜索上方目标店名 → 打开一篇笔记 → <b>直接复制地址栏网址</b> → 回来粘贴。<br>
     从小红书 App 分享也可以：复制分享链接粘贴到下面，会自动解析（等几秒）。
   </div>
   <input id="noteUrl" placeholder="粘贴笔记网址或分享文本">
@@ -85,8 +86,9 @@ const API_BASE = "https://bdwrhshgdeghgyzwpxnl.supabase.co";
 const API_KEY = "sb_publishable_c93XenGzZsoa308e3bTg6A__lfaqQ-B";
 const $ = (id) => document.getElementById(id);
 const PID_RE = /^P-[A-Z0-9]{6,12}$/;
-let task = null, kwIndex = -1;
-let resolved = null; // {note_id, canonical_url}
+let target = null;
+let resolved = null;
+const skipped = new Set(JSON.parse(localStorage.getItem("kw_skipped") || "[]"));
 
 function toast(el, cls, html) { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; el.innerHTML = ""; el.appendChild(d); }
 async function rpc(fn, body, timeoutMs) {
@@ -102,13 +104,6 @@ async function rpc(fn, body, timeoutMs) {
   } catch (e) { return { httpOk: false, data: null }; }
   finally { clearTimeout(timer); }
 }
-function parsePack(pack) {
-  if (Array.isArray(pack)) return pack;
-  if (typeof pack !== "string") return [];
-  const out = []; const re = /'([^']*)'/g; let m;
-  while ((m = re.exec(pack)) !== null) out.push(m[1]);
-  return out;
-}
 function extractDirect(url) {
   const m = url.match(/xiaohongshu\.com\/(?:explore|discovery\/item)\/([0-9a-zA-Z]+)/);
   return m ? m[1] : null;
@@ -117,9 +112,8 @@ function extractAnyUrl(text) {
   const m = (text || "").match(/https?:\/\/[^\s，。；、"'<>）)]+/);
   return m ? m[0] : null;
 }
-function seqKey() { return "proof_seq_" + task.task_id + "_" + kwIndex; }
+function seqKey() { return "proof_seq_" + target.task_id + "_" + target.kw_index; }
 
-// ---------- ① 编号 ----------
 function setPidUI(pid) {
   $("pidStatus").textContent = pid;
   $("pidForm").classList.add("hidden");
@@ -129,7 +123,7 @@ $("savePid").onclick = () => {
   const pid = $("pid").value.trim().toUpperCase();
   if (!PID_RE.test(pid)) { alert("编号格式应为 P- 加 6~12 位大写字母数字"); return; }
   localStorage.setItem("participant_id", pid);
-  setPidUI(pid); fetchTask();
+  setPidUI(pid); loadTarget();
 };
 $("join").onclick = async () => {
   const btn = $("join"); btn.disabled = true; btn.textContent = "注册中…";
@@ -145,56 +139,40 @@ $("join").onclick = async () => {
     const pid = d.participant_id || (Array.isArray(d) && d[0] && d[0].participant_id);
     if (pid && PID_RE.test(pid)) {
       localStorage.setItem("participant_id", pid);
-      setPidUI(pid); fetchTask();
+      setPidUI(pid); loadTarget();
     } else { alert("注册失败：" + JSON.stringify(d)); }
   } finally { btn.disabled = false; btn.textContent = "我要加入（点一下自动获得编号）"; }
 };
 
-// ---------- ② 任务 ----------
-$("refresh").onclick = fetchTask;
-async function fetchTask() {
+$("refresh").onclick = loadTarget;
+$("skipKw").onclick = () => {
+  if (!target) return;
+  skipped.add(target.keyword);
+  localStorage.setItem("kw_skipped", JSON.stringify([...skipped]));
+  target = null;
+  loadTarget();
+};
+async function loadTarget() {
   const pid = localStorage.getItem("participant_id");
   if (!pid) return;
-  $("taskInfo").textContent = "领取/刷新任务中…";
-  const r = await rpc("crowd_fetch_tasks", { p_participant_id: pid });
+  $("targetBox").innerHTML = '<span class="spin"></span>正在问中枢要目标…';
+  const r = await rpc("crowd_next_target", { p_participant_id: pid, p_exclude: [...skipped] });
   const d = r.data || {};
-  if (!d.ok || !d.tasks || !d.tasks.length) {
-    task = null;
-    $("taskInfo").textContent = "暂时没有可领的任务（" + (d.reason || "未知") + "），稍后再点刷新。";
-    $("storeList").innerHTML = ""; $("card-submit").classList.add("hidden");
+  if (!d.ok) {
+    target = null;
+    $("targetBox").textContent = "暂时没有可分配的目标";
+    $("taskMeta").textContent = "（" + (d.reason || "未知") + "）点刷新重试；全部完成时也会显示在这里。";
+    $("card-submit").classList.add("hidden");
     return;
   }
-  task = d.tasks[0];
-  task.packArr = parsePack(task.pack);
-  $("taskInfo").innerHTML = "任务 #" + task.task_id + " · 每店 " + task.kpi_min + " 条 · 总进度 " + (task.progress || 0) +
-    " · 租约至 " + (task.claimed_until ? new Date(task.claimed_until).toLocaleString() : "-");
-  const kwProg = {};
-  (task.keyword_progress || []).forEach(k => { kwProg[k.keyword] = k.accepted; });
-  $("storeList").innerHTML = "";
-  let firstOpen = -1;
-  task.packArr.forEach((store, i) => {
-    const done = (kwProg[store] || 0) >= task.kpi_min;
-    if (firstOpen < 0 && !done) firstOpen = i;
-    const b = document.createElement("button");
-    b.className = "store"; b.textContent = (done ? "✅ " : "") + store;
-    const pct = document.createElement("span");
-    pct.className = "pct"; pct.textContent = (kwProg[store] || 0) + "/" + task.kpi_min;
-    b.appendChild(pct);
-    b.onclick = () => selectStore(i);
-    $("storeList").appendChild(b);
-  });
-  // 自动选中第一家未完成门店（可点别的切换）
-  if (kwIndex < 0 && firstOpen >= 0) selectStore(firstOpen);
-}
-function selectStore(i) {
-  kwIndex = i;
-  [...document.querySelectorAll(".store")].forEach((x, j) => x.classList.toggle("on", j === i));
-  $("curStore").textContent = task.packArr[i];
-  $("kwEcho").textContent = task.packArr[i];
+  target = d;
+  $("targetBox").innerHTML = "🎯 " + d.keyword +
+    '<span class="pct">已收录 ' + (d.accepted || 0) + "/" + d.kpi_min + " 条 · 做完自动换下一家</span>";
+  $("taskMeta").textContent = "任务 #" + d.task_id + " · 目标有效期至 " +
+    (d.lease_until ? new Date(d.lease_until).toLocaleString() : "-") + (d.reused ? " · 续上次的进度" : " · 新分配");
   $("card-submit").classList.remove("hidden");
 }
 
-// ---------- 链接解析（粘贴即触发） ----------
 let parseTimer = null;
 $("noteUrl").addEventListener("input", () => {
   resolved = null; $("submit").disabled = true;
@@ -232,19 +210,18 @@ async function autoResolve() {
   $("parseStatus").innerHTML = "❌ 只支持小红书链接：xiaohongshu.com 笔记网址，或 App 分享的 xhslink.com 短链。";
 }
 
-// ---------- ③ 提交 ----------
 $("submit").onclick = async () => {
   const pid = localStorage.getItem("participant_id");
-  if (!task || kwIndex < 0) { alert("请先选择一家门店"); return; }
+  if (!target) { alert("中枢还没分配目标，点②的刷新"); return; }
   if (!resolved) { toast($("result"), "err-note", "❌ 先粘贴笔记链接，等识别成功后再提交。"); return; }
-  const keyword = task.packArr[kwIndex];
+  const keyword = target.keyword;
   const seq = parseInt(localStorage.getItem(seqKey()) || "0", 10);
   const envelope = {
     submission_id: crypto.randomUUID(),
     participant_id: pid,
-    task_id: task.task_id,
-    kw_index: kwIndex,
-    kpi_min: task.kpi_min,
+    task_id: target.task_id,
+    kw_index: target.kw_index,
+    kpi_min: target.kpi_min,
     proof_seq: seq,
     captured_at: new Date().toISOString(),
     sync_version: 3,
@@ -265,21 +242,20 @@ $("submit").onclick = async () => {
     if (d.ok) {
       localStorage.setItem(seqKey(), String(seq + 1));
       const v = (d.results && d.results[0]) || {};
-      const kp = (d.keyword_progress || []).map(k => k.keyword + " " + k.accepted + "/" + task.kpi_min).join(" · ");
+      const kp = (d.keyword_progress || []).map(k => k.keyword + " " + k.accepted + "/" + target.kpi_min).join(" · ");
       $("myProgress").textContent = kp || ("任务进度 " + (d.new_progress != null ? d.new_progress : "?"));
       toast($("result"), "ok-note", "✅ 服务端已确认：<b>" + (v.gate || v.verdict || "accepted") + "</b>" +
         (v.reason ? "（" + v.reason + "）" : "") + "<br>" + kp +
         (d.task_status === "fulfilled" ? "<br>🎉 任务全部完成！" : ""));
       $("noteUrl").value = ""; $("noteTitle").value = ""; $("noteExcerpt").value = "";
       $("parseStatus").innerHTML = ""; resolved = null;
-      fetchTask();
+      loadTarget();
     } else {
       toast($("result"), "err-note", "❌ 未入库：" + (d.reason || "HTTP 错误") + "<br>可稍后重试，不会重复计酬。");
     }
   } finally { btn.disabled = !resolved; btn.textContent = "提交这条笔记"; }
 };
 
-// ---------- PWA：注册 SW + 安装提示 + 分享直达 ----------
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
@@ -294,7 +270,6 @@ $("installApp").onclick = async () => {
   }
 };
 
-// 分享直达：从小红书 App 分享过来时，自动 取分享文本 → 解析 → 提交
 async function drainShare() {
   if (!location.search.includes("share=1")) return;
   try {
@@ -317,12 +292,14 @@ async function drainShare() {
     await autoResolve();
     if (resolved) $("submit").click();
     else toast($("result"), "err-note", "❌ 分享内容里没解析出笔记链接，请手动粘贴一次。");
-  } catch (e) { /* 静默：用户仍可手动粘贴 */ }
+  } catch (e) { }
 }
 
-// ---------- 启动 ----------
 const pid = localStorage.getItem("participant_id");
-if (pid && PID_RE.test(pid)) { setPidUI(pid); fetchTask().then(drainShare); } else { drainShare(); }
+if (pid && PID_RE.test(pid)) {
+  setPidUI(pid);
+  loadTarget().then(drainShare);
+} else { drainShare(); }
 })();
 </script>
 </body>
