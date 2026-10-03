@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>众包美食家 · 手机版（Android）</title>
+<style>
+  :root{--brand:#b45309;--bg:#faf7f2;--card:#fff;--sub:#6b7280;--ok:#059669}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1a2e;min-height:100vh;display:flex;justify-content:center;padding:20px 14px}
+  .wrap{max-width:520px;width:100%}
+  h1{font-size:22px;margin-bottom:6px}
+  .sub{color:var(--sub);margin-bottom:20px;line-height:1.6;font-size:14px}
+  .card{background:var(--card);border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  .card h2{font-size:16px;margin-bottom:12px}
+  .step{display:flex;gap:10px;margin:10px 0;font-size:14px;line-height:1.6;color:#374151}
+  .step b{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#eef2f7;color:#6b7280;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px}
+  code{background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:12px;word-break:break-all}
+  .btn{display:block;background:var(--brand);color:#fff;border:none;border-radius:10px;padding:13px 20px;font-size:15px;cursor:pointer;font-weight:600;text-decoration:none;margin-top:12px;text-align:center}
+  .btn.alt{background:#fff;color:var(--brand);border:1.5px solid var(--brand)}
+  .note{font-size:12px;color:var(--sub);margin-top:10px;line-height:1.6}
+  .ok-note{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.7;margin-top:8px}
+  .warn-note{background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.7;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📱 众包美食家 · 手机版（Android）</h1>
+  <p class="sub">手机上最简单的参与方式：<b>不用装任何东西</b>，打开网页就能提交笔记。</p>
+
+  <!-- ============ 推荐：免安装网页提交 ============ -->
+  <div class="card">
+    <h2>✅ 推荐：免安装 · 网页提交（约 1 分钟上手）</h2>
+    <div class="step"><b>1</b><div>打开下方「手机提交」网页，点 <b>「我要加入」</b>自动获得参与编号</div></div>
+    <div class="step"><b>2</b><div>自动领取任务后，默认已选中第一家门店（可点别家切换）</div></div>
+    <div class="step"><b>3</b><div>在同一浏览器<b>新开标签页</b>打开 <b>m.xiaohongshu.com</b>（登录一次）→ 搜索店名 → 打开一篇笔记 → <b>复制地址栏网址</b></div></div>
+    <div class="step"><b>4</b><div>回到提交页粘贴 → 点提交 → 立刻看到是否被采用。小红书 App 的分享链接也支持，粘贴后自动解析</div></div>
+    <a class="btn" href="submit.html">🚀 打开手机提交页</a>
+    <div class="ok-note">与电脑版同一任务池、同一套计酬规则（笔记 ¥2/条）。提交记录可在本页随时查看进度。</div>
+  </div>
+
+  <!-- ============ 可选：插件自动采集（已弃用 Kiwi） ============ -->
+  <div class="card">
+    <h2>🔧 可选：插件自动采集（限 Android）</h2>
+    <div class="warn-note">
+      ⚠️ 原方案依赖的 <b>Kiwi 浏览器已于 2025 年初停止维护</b>，安全性和兼容性无保障，2026 年起不再作为推荐入口。<br>
+      手机端自动采集的替代浏览器（Firefox Android 自托管扩展等）正在测试中，稳定前请使用上方网页提交。
+    </div>
+    <div class="note">iPhone（iOS）受苹果系统限制，任何第三方扩展方案均不可用，请使用网页提交。</div>
+  </div>
+</div>
+</body>
+</html>
