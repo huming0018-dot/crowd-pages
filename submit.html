@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>众包美食家 · 手机提交</title>
+<meta name="theme-color" content="#b45309">
+<link rel="manifest" href="app-manifest.json">
+<style>
+  :root{--brand:#b45309;--bg:#faf7f2;--card:#fff;--sub:#6b7280;--ok:#059669;--err:#b91c1c}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);font-family:-apple-system,'PingFang SC',sans-serif;color:#1a1a2e;padding:16px;max-width:560px;margin:0 auto}
+  h1{font-size:20px;margin-bottom:4px}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:16px;line-height:1.5}
+  .card{background:var(--card);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  .card h2{font-size:15px;margin-bottom:10px}
+  .row{display:flex;gap:8px}
+  input,textarea{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px;background:#fff}
+  textarea{min-height:64px;resize:vertical}
+  .btn{display:inline-block;background:var(--brand);color:#fff;border:none;border-radius:10px;padding:13px 18px;font-size:16px;font-weight:600;cursor:pointer;text-align:center}
+  .btn:disabled{opacity:.5}
+  .btn.alt{background:#fff;color:var(--brand);border:1.5px solid var(--brand)}
+  .btn.block{width:100%;margin-top:10px}
+  .note{font-size:12px;color:var(--sub);margin-top:8px;line-height:1.6}
+  .store{display:block;width:100%;text-align:left;padding:13px 14px;border:1.5px solid #e5e7eb;border-radius:10px;background:#fff;font-size:15px;margin-bottom:8px;cursor:pointer}
+  .store.on{border-color:var(--brand);background:#fef3c7;font-weight:600}
+  .store .pct{float:right;color:var(--sub);font-size:12px}
+  .ok-note{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:12px;border-radius:10px;font-size:14px;line-height:1.6;margin-top:10px;word-break:break-all}
+  .err-note{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px;border-radius:10px;font-size:14px;line-height:1.6;margin-top:10px;word-break:break-all}
+  .steps{font-size:13px;color:#374151;line-height:1.9;background:#f3f4f6;border-radius:10px;padding:10px 12px;margin:8px 0}
+  .hidden{display:none}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:12px;background:#eef2f7;color:#6b7280;margin-left:6px}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid #d1d5db;border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle;margin-right:4px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<h1>🍜 众包美食家 · 手机提交</h1>
+<p class="sub">不用装任何东西。小红书也在这个浏览器里用，复制网址粘贴过来就行。</p>
+
+<!-- ① 身份 -->
+<div class="card" id="card-id">
+  <h2>① 你的参与编号 <span class="pill" id="pidStatus">未设置</span></h2>
+  <div id="pidForm">
+    <div class="row">
+      <input id="pid" placeholder="P- 开头编号" style="flex:1" autocapitalize="characters">
+      <button class="btn alt" id="savePid">保存</button>
+    </div>
+    <button class="btn block" id="join">我要加入（点一下自动获得编号）</button>
+    <button class="btn alt block" id="installApp">📲 添加到主屏幕（之后小红书「分享」直达本页，自动提交）</button>
+  </div>
+</div>
+
+<!-- ② 任务 -->
+<div class="card hidden" id="card-task">
+  <h2>② 当前任务 <button class="btn alt" id="refresh" style="float:right;padding:6px 12px;font-size:13px">刷新</button></h2>
+  <div id="taskInfo" class="note"></div>
+  <div id="storeList"></div>
+</div>
+
+<!-- ③ 提交 -->
+<div class="card hidden" id="card-submit">
+  <h2>③ 粘贴笔记链接 <span class="pill" id="curStore"></span></h2>
+  <div class="steps">
+    <b>最简单的方法（推荐）</b>：在本浏览器<b>新开一个标签页</b>打开 <b>m.xiaohongshu.com</b>（登录一次）→ 搜索「<span id="kwEcho"></span>」→ 打开一篇笔记 → <b>直接复制地址栏网址</b> → 回来粘贴。<br>
+    从小红书 App 分享也可以：复制分享链接粘贴到下面，会自动解析（等几秒）。
+  </div>
+  <input id="noteUrl" placeholder="粘贴笔记网址或分享文本">
+  <div id="parseStatus" class="note"></div>
+  <input id="noteTitle" placeholder="笔记标题（可选）" style="margin-top:8px">
+  <textarea id="noteExcerpt" placeholder="口味相关的正文片段（可选）"></textarea>
+  <button class="btn block" id="submit" disabled>提交这条笔记</button>
+  <div id="result"></div>
+</div>
+
+<div class="card">
+  <h2>📊 我的进度</h2>
+  <div id="myProgress" class="note">提交后这里显示任务进度。</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const API_BASE = "https://bdwrhshgdeghgyzwpxnl.supabase.co";
+const API_KEY = "sb_publishable_c93XenGzZsoa308e3bTg6A__lfaqQ-B";
+const $ = (id) => document.getElementById(id);
+const PID_RE = /^P-[A-Z0-9]{6,12}$/;
+let task = null, kwIndex = -1;
+let resolved = null; // {note_id, canonical_url}
+
+function toast(el, cls, html) { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; el.innerHTML = ""; el.appendChild(d); }
+async function rpc(fn, body, timeoutMs) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs || 15000);
+  try {
+    const r = await fetch(API_BASE + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers: {"Content-Type":"application/json","apikey":API_KEY,"Authorization":"Bearer "+API_KEY},
+      body: JSON.stringify(body), signal: ctl.signal
+    });
+    return { httpOk: r.ok, data: await r.json().catch(() => null) };
+  } catch (e) { return { httpOk: false, data: null }; }
+  finally { clearTimeout(timer); }
+}
+function parsePack(pack) {
+  if (Array.isArray(pack)) return pack;
+  if (typeof pack !== "string") return [];
+  const out = []; const re = /'([^']*)'/g; let m;
+  while ((m = re.exec(pack)) !== null) out.push(m[1]);
+  return out;
+}
+function extractDirect(url) {
+  const m = url.match(/xiaohongshu\.com\/(?:explore|discovery\/item)\/([0-9a-zA-Z]+)/);
+  return m ? m[1] : null;
+}
+function extractAnyUrl(text) {
+  const m = (text || "").match(/https?:\/\/[^\s，。；、"'<>）)]+/);
+  return m ? m[0] : null;
+}
+function seqKey() { return "proof_seq_" + task.task_id + "_" + kwIndex; }
+
+// ---------- ① 编号 ----------
+function setPidUI(pid) {
+  $("pidStatus").textContent = pid;
+  $("pidForm").classList.add("hidden");
+  $("card-task").classList.remove("hidden");
+}
+$("savePid").onclick = () => {
+  const pid = $("pid").value.trim().toUpperCase();
+  if (!PID_RE.test(pid)) { alert("编号格式应为 P- 加 6~12 位大写字母数字"); return; }
+  localStorage.setItem("participant_id", pid);
+  setPidUI(pid); fetchTask();
+};
+$("join").onclick = async () => {
+  const btn = $("join"); btn.disabled = true; btn.textContent = "注册中…";
+  try {
+    let salt = localStorage.getItem("device_salt");
+    if (!salt) {
+      const buf = new Uint8Array(8); crypto.getRandomValues(buf);
+      salt = "Dsalt" + [...buf].map(b => b.toString(16).padStart(2, "0")).join("");
+      localStorage.setItem("device_salt", salt);
+    }
+    const r = await rpc("crowd_register_participant", { p_device_salt: salt, p_source: "mobile_web" });
+    const d = r.data || {};
+    const pid = d.participant_id || (Array.isArray(d) && d[0] && d[0].participant_id);
+    if (pid && PID_RE.test(pid)) {
+      localStorage.setItem("participant_id", pid);
+      setPidUI(pid); fetchTask();
+    } else { alert("注册失败：" + JSON.stringify(d)); }
+  } finally { btn.disabled = false; btn.textContent = "我要加入（点一下自动获得编号）"; }
+};
+
+// ---------- ② 任务 ----------
+$("refresh").onclick = fetchTask;
+async function fetchTask() {
+  const pid = localStorage.getItem("participant_id");
+  if (!pid) return;
+  $("taskInfo").textContent = "领取/刷新任务中…";
+  const r = await rpc("crowd_fetch_tasks", { p_participant_id: pid });
+  const d = r.data || {};
+  if (!d.ok || !d.tasks || !d.tasks.length) {
+    task = null;
+    $("taskInfo").textContent = "暂时没有可领的任务（" + (d.reason || "未知") + "），稍后再点刷新。";
+    $("storeList").innerHTML = ""; $("card-submit").classList.add("hidden");
+    return;
+  }
+  task = d.tasks[0];
+  task.packArr = parsePack(task.pack);
+  $("taskInfo").innerHTML = "任务 #" + task.task_id + " · 每店 " + task.kpi_min + " 条 · 总进度 " + (task.progress || 0) +
+    " · 租约至 " + (task.claimed_until ? new Date(task.claimed_until).toLocaleString() : "-");
+  const kwProg = {};
+  (task.keyword_progress || []).forEach(k => { kwProg[k.keyword] = k.accepted; });
+  $("storeList").innerHTML = "";
+  let firstOpen = -1;
+  task.packArr.forEach((store, i) => {
+    const done = (kwProg[store] || 0) >= task.kpi_min;
+    if (firstOpen < 0 && !done) firstOpen = i;
+    const b = document.createElement("button");
+    b.className = "store"; b.textContent = (done ? "✅ " : "") + store;
+    const pct = document.createElement("span");
+    pct.className = "pct"; pct.textContent = (kwProg[store] || 0) + "/" + task.kpi_min;
+    b.appendChild(pct);
+    b.onclick = () => selectStore(i);
+    $("storeList").appendChild(b);
+  });
+  // 自动选中第一家未完成门店（可点别的切换）
+  if (kwIndex < 0 && firstOpen >= 0) selectStore(firstOpen);
+}
+function selectStore(i) {
+  kwIndex = i;
+  [...document.querySelectorAll(".store")].forEach((x, j) => x.classList.toggle("on", j === i));
+  $("curStore").textContent = task.packArr[i];
+  $("kwEcho").textContent = task.packArr[i];
+  $("card-submit").classList.remove("hidden");
+}
+
+// ---------- 链接解析（粘贴即触发） ----------
+let parseTimer = null;
+$("noteUrl").addEventListener("input", () => {
+  resolved = null; $("submit").disabled = true;
+  clearTimeout(parseTimer);
+  parseTimer = setTimeout(autoResolve, 500);
+});
+async function autoResolve() {
+  const raw = $("noteUrl").value.trim();
+  if (!raw) { $("parseStatus").innerHTML = ""; return; }
+  const url = extractAnyUrl(raw) || raw;
+  const direct = extractDirect(url);
+  if (direct) {
+    resolved = { note_id: direct, canonical_url: url };
+    $("parseStatus").innerHTML = "✅ 已识别笔记 <code>" + direct + "</code>";
+    $("submit").disabled = false;
+    return;
+  }
+  if (/^https?:\/\/(www\.)?xhslink\.com\//.test(url)) {
+    $("parseStatus").innerHTML = '<span class="spin"></span>正在解析短链（几秒到十几秒）…';
+    const r = await rpc("crowd_resolve_link", { p_input: url }, 45000);
+    const d = r.data || {};
+    if (d.ok && d.note_id) {
+      resolved = { note_id: d.note_id, canonical_url: d.canonical_url };
+      $("noteUrl").value = d.canonical_url;
+      $("parseStatus").innerHTML = "✅ 已解析笔记 <code>" + d.note_id + "</code>";
+      $("submit").disabled = false;
+    } else {
+      const hint = d.reason === "resolve_timeout" ? "解析超时，请改用上方推荐方法（浏览器里打开小红书直接复制网址）"
+        : d.reason === "no_note_id" ? "这个链接没指向具体笔记（" + (d.final_url || "") + "）"
+        : "无法解析（" + (d.reason || "网络") + "），建议用上方推荐方法";
+      $("parseStatus").innerHTML = "❌ " + hint;
+    }
+    return;
+  }
+  $("parseStatus").innerHTML = "❌ 只支持小红书链接：xiaohongshu.com 笔记网址，或 App 分享的 xhslink.com 短链。";
+}
+
+// ---------- ③ 提交 ----------
+$("submit").onclick = async () => {
+  const pid = localStorage.getItem("participant_id");
+  if (!task || kwIndex < 0) { alert("请先选择一家门店"); return; }
+  if (!resolved) { toast($("result"), "err-note", "❌ 先粘贴笔记链接，等识别成功后再提交。"); return; }
+  const keyword = task.packArr[kwIndex];
+  const seq = parseInt(localStorage.getItem(seqKey()) || "0", 10);
+  const envelope = {
+    submission_id: crypto.randomUUID(),
+    participant_id: pid,
+    task_id: task.task_id,
+    kw_index: kwIndex,
+    kpi_min: task.kpi_min,
+    proof_seq: seq,
+    captured_at: new Date().toISOString(),
+    sync_version: 3,
+    items: [{
+      kind: "note", platform: "xiaohongshu",
+      note_id: resolved.note_id,
+      note_url: resolved.canonical_url,
+      title: $("noteTitle").value.trim(),
+      excerpt: $("noteExcerpt").value.trim().slice(0, 200),
+      matched_store: keyword,
+      raw_query: keyword
+    }]
+  };
+  const btn = $("submit"); btn.disabled = true; btn.textContent = "提交中…";
+  try {
+    const r = await rpc("crowd_submit_proof", { p_participant_id: pid, p_envelope: envelope });
+    const d = r.data || {};
+    if (d.ok) {
+      localStorage.setItem(seqKey(), String(seq + 1));
+      const v = (d.results && d.results[0]) || {};
+      const kp = (d.keyword_progress || []).map(k => k.keyword + " " + k.accepted + "/" + task.kpi_min).join(" · ");
+      $("myProgress").textContent = kp || ("任务进度 " + (d.new_progress != null ? d.new_progress : "?"));
+      toast($("result"), "ok-note", "✅ 服务端已确认：<b>" + (v.gate || v.verdict || "accepted") + "</b>" +
+        (v.reason ? "（" + v.reason + "）" : "") + "<br>" + kp +
+        (d.task_status === "fulfilled" ? "<br>🎉 任务全部完成！" : ""));
+      $("noteUrl").value = ""; $("noteTitle").value = ""; $("noteExcerpt").value = "";
+      $("parseStatus").innerHTML = ""; resolved = null;
+      fetchTask();
+    } else {
+      toast($("result"), "err-note", "❌ 未入库：" + (d.reason || "HTTP 错误") + "<br>可稍后重试，不会重复计酬。");
+    }
+  } finally { btn.disabled = !resolved; btn.textContent = "提交这条笔记"; }
+};
+
+// ---------- PWA：注册 SW + 安装提示 + 分享直达 ----------
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+let deferredInstall = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; });
+$("installApp").onclick = async () => {
+  if (deferredInstall) {
+    deferredInstall.prompt();
+    await deferredInstall.userChoice; deferredInstall = null;
+  } else {
+    alert("请点浏览器菜单（⋮）→「添加到主屏幕」。\n装好后：在小红书 App 里打开笔记 → 分享 → 选「众包美食家」，即可自动提交，不用复制粘贴。");
+  }
+};
+
+// 分享直达：从小红书 App 分享过来时，自动 取分享文本 → 解析 → 提交
+async function drainShare() {
+  if (!location.search.includes("share=1")) return;
+  try {
+    const db = await new Promise((res, rej) => {
+      const r = indexedDB.open("crowd-share-db", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("pending", { autoIncrement: true });
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    const items = await new Promise((res) => {
+      const rq = db.transaction("pending", "readonly").objectStore("pending").getAll();
+      rq.onsuccess = () => res(rq.result || []); rq.onerror = () => res([]);
+    });
+    if (!items.length) return;
+    await new Promise((res) => {
+      const tx = db.transaction("pending", "readwrite");
+      tx.objectStore("pending").clear(); tx.oncomplete = res;
+    });
+    $("noteUrl").value = items[items.length - 1].text || "";
+    toast($("result"), "ok-note", "📥 已收到小红书分享，自动解析提交中…");
+    await autoResolve();
+    if (resolved) $("submit").click();
+    else toast($("result"), "err-note", "❌ 分享内容里没解析出笔记链接，请手动粘贴一次。");
+  } catch (e) { /* 静默：用户仍可手动粘贴 */ }
+}
+
+// ---------- 启动 ----------
+const pid = localStorage.getItem("participant_id");
+if (pid && PID_RE.test(pid)) { setPidUI(pid); fetchTask().then(drainShare); } else { drainShare(); }
+})();
+</script>
+</body>
+</html>
