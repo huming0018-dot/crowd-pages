@@ -26,27 +26,30 @@
 <body>
 <div class="wrap">
   <h1>📱 众包美食家 · 手机版（Android）</h1>
-  <p class="sub">手机上最简单的参与方式：<b>不用装任何东西</b>，打开网页就能提交笔记。</p>
+  <p class="sub">两种参与方式：<b>全自动采集</b>（装一次插件，之后自己跑）或<b>免安装网页提交</b>（手动但零门槛）。</p>
 
-  <!-- ============ 推荐：免安装网页提交 ============ -->
+  <!-- ============ 全自动：狐猴浏览器 + 插件 ============ -->
   <div class="card">
-    <h2>✅ 推荐：免安装 · 网页提交（约 1 分钟上手）</h2>
-    <div class="step"><b>1</b><div>打开下方「手机提交」网页，点 <b>「我要加入」</b>自动获得参与编号</div></div>
-    <div class="step"><b>2</b><div>自动领取任务后，默认已选中第一家门店（可点别家切换）</div></div>
-    <div class="step"><b>3</b><div>在同一浏览器<b>新开标签页</b>打开 <b>m.xiaohongshu.com</b>（登录一次）→ 搜索店名 → 打开一篇笔记 → <b>复制地址栏网址</b></div></div>
-    <div class="step"><b>4</b><div>回到提交页粘贴 → 点提交 → 立刻看到是否被采用。小红书 App 的分享链接也支持，粘贴后自动解析</div></div>
-    <a class="btn" href="submit.html">🚀 打开手机提交页</a>
-    <div class="ok-note">与电脑版同一任务池、同一套计酬规则（笔记 ¥2/条）。提交记录可在本页随时查看进度。</div>
+    <h2>🤖 全自动采集（推荐 · 装好就不用管）</h2>
+    <div class="step"><b>1</b><div>应用商店搜索安装 <b>狐猴浏览器（Lemur Browser）</b>——仍在维护、支持 Chrome 扩展的安卓浏览器</div></div>
+    <div class="step"><b>2</b><div>点下方按钮下载插件 zip（不用解压）</div></div>
+    <div class="step"><b>3</b><div>狐猴浏览器：右下角菜单 → <b>扩展商店/扩展管理</b> → 选择「从本地安装/加载 zip」→ 选中刚下载的 <code>crowd-extension-v3.3.1.zip</code></div></div>
+    <div class="step"><b>4</b><div>首次安装会自动打开「参与协议」页：点 <b>「我要加入」</b>自动获得编号 → 同意并开始</div></div>
+    <div class="step"><b>5</b><div>打开 <code>www.xiaohongshu.com</code> 登录你的账号，浏览器菜单里开启「<b>桌面版网站</b>」开关（让小红书按电脑版显示，插件才能正确识别页面）</div></div>
+    <div class="ok-note">✅ 之后全自动：插件自己领任务 → 搜索 → 采集 → 回传 → 领下一个任务。插件有新版本也会自动更新。</div>
+    <a class="btn" href="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-extension-v3.3.1.zip" download="crowd-extension-v3.3.1.zip">⬇️ 下载插件 v3.3.1（zip）</a>
+    <div class="warn-note" style="margin-top:10px;">
+      说明：旧方案用的 Kiwi 浏览器已于 2025 年初停止维护，不再推荐。若你已装 Kiwi 且一切正常，也可继续用它加载同一个 zip（步骤相同）。
+    </div>
   </div>
 
-  <!-- ============ 可选：插件自动采集（已弃用 Kiwi） ============ -->
+  <!-- ============ 免安装：网页提交 ============ -->
   <div class="card">
-    <h2>🔧 可选：插件自动采集（限 Android）</h2>
-    <div class="warn-note">
-      ⚠️ 原方案依赖的 <b>Kiwi 浏览器已于 2025 年初停止维护</b>，安全性和兼容性无保障，2026 年起不再作为推荐入口。<br>
-      手机端自动采集的替代浏览器（Firefox Android 自托管扩展等）正在测试中，稳定前请使用上方网页提交。
-    </div>
-    <div class="note">iPhone（iOS）受苹果系统限制，任何第三方扩展方案均不可用，请使用网页提交。</div>
+    <h2>⚡ 免安装 · 网页提交（任何手机都能用）</h2>
+    <div class="step"><b>1</b><div>打开「手机提交」网页 → 点「我要加入」自动获得编号</div></div>
+    <div class="step"><b>2</b><div>中枢自动分配门店 → 去小红书搜该店 → 复制笔记网址（或 App 分享链接）→ 粘贴提交</div></div>
+    <a class="btn alt" href="submit.html">🚀 打开手机提交页</a>
+    <p class="note">iPhone 请用此方式（苹果系统不允许任何浏览器插件，这是平台硬限制）。</p>
   </div>
 </div>
 </body>
