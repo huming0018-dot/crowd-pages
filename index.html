@@ -58,12 +58,17 @@
           '<div class="note">安卓用户装 Firefox 浏览器后点第二个按钮，可一键装插件实现全自动采集。</div>');
   } else if (isMac) {
     $("detected").textContent = "检测到：Mac 电脑";
-    show('<a class="btn" href="' + BUCKET + '/crowd-install-mac.command" download="安装.command">⬇️ 下载一键安装器</a>');
-    steps('<div class="step">① 点上面按钮下载（自动开始）</div>' +
-          '<div class="step">② 在「下载」里双击它，输一次开机密码</div>' +
+    const cmd = "curl -fsSL " + BUCKET + "/crowd-install-mac.command | bash";
+    show('<div style="background:#1a1a2e;color:#7ee787;font-family:monospace;font-size:13px;padding:14px;border-radius:10px;text-align:left;word-break:break-all" id="cmdline">' + cmd + '</div>' +
+         '<button class="btn" id="copyBtn">📋 复制安装命令</button>');
+    steps('<div class="step">① 按 ⌘空格 → 输入「终端」→ 回车</div>' +
+          '<div class="step">② 粘贴刚复制的命令 → 回车 → 输开机密码（不显示）</div>' +
           '<div class="step">③ Chrome 自动装好插件并全自动采集，以后自动升级</div>');
-    // 桌面端尝试自动触发下载（被浏览器拦截也无妨，按钮就在那）
-    setTimeout(() => { document.querySelector(".btn").click(); }, 600);
+    document.getElementById("copyBtn").onclick = () => {
+      navigator.clipboard.writeText(cmd).then(() => {
+        document.getElementById("copyBtn").textContent = "✅ 已复制，去终端粘贴";
+      });
+    };
   } else if (isWin) {
     $("detected").textContent = "检测到：Windows 电脑";
     show('<a class="btn" href="' + BUCKET + '/crowd-install-win.bat" download="安装.bat">⬇️ 下载一键安装器</a>');
