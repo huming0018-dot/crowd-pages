@@ -51,11 +51,13 @@
     // 手机：免安装网页就是主路径（一键）
     $("detected").textContent = isAndroid ? "检测到：安卓手机" : "检测到：iPhone";
     show('<a class="btn" href="submit.html">🚀 开始参与（免安装）</a>' +
-         '<a class="btn alt" href="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-extension-v3.4.1-firefox-signed.xpi">想要全自动？装 Firefox 后点这里一键装插件</a>');
+         (isAndroid ? '<a class="btn alt" href="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-extension-v3.4.1-firefox-signed.xpi">想要全自动？装 Firefox 后点这里一键装插件</a>'
+                    : '<a class="btn alt" href="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-ios.shortcut">⚡ 加装快捷指令：小红书分享→自动提交</a>'));
     steps('<div class="step">① 点上面的橙色按钮</div>' +
           '<div class="step">② 点「我要加入」领编号</div>' +
           '<div class="step">③ 按页面派的店找笔记提交，完成</div>' +
-          '<div class="note">安卓用户装 Firefox 浏览器后点第二个按钮，可一键装插件实现全自动采集。</div>');
+          (isAndroid ? '<div class="note">安卓用户装 Firefox 浏览器后点第二个按钮，可一键装插件实现全自动采集。</div>'
+                     : '<div class="note">iPhone：装第二个按钮的快捷指令后，小红书 App 里「分享 → 众包美食家」即可自动提交。首次使用会问一次参与编号。</div>'));
   } else if (isMac) {
     $("detected").textContent = "检测到：Mac 电脑";
     const cmd = "curl -fsSL " + BUCKET + "/crowd-install-mac.command | bash";
