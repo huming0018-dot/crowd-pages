@@ -34,14 +34,14 @@
 
     <div class="dl">
       <div style="font-size:14px;font-weight:600;">第一步：下载插件</div>
-      <a id="dlLink" class="zip" href="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-extension-v3.3.0.zip" download>⬇️ 下载插件 v3.3.0（zip）</a>
-      <p class="zip-name">文件：crowd-extension-v3.3.0.zip · 全自动采集 · 安全线保护 · 支持电脑/Android</p>
+      <a id="dlLink" class="zip" href="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-extension-v3.3.1.zip" download>⬇️ 下载插件 v3.3.0（zip）</a>
+      <p class="zip-name">文件：crowd-extension-v3.3.1.zip · 全自动采集 · 安全线保护 · 支持电脑/Android</p>
     </div>
 
     <div class="steps">
       <b>第二步：安装插件</b>
       <p class="hint" style="margin-top:8px;">电脑（macOS/Windows）：<a href="install.html" style="color:var(--brand);font-weight:600;">点此打开安装引导</a>（自动检测系统，一键脚本）<br>
-      Android 手机：<a href="install-mobile.html" style="color:var(--brand);font-weight:600;">点此打开手机版教程</a>（免安装网页提交）<br>
+      Android 手机：<a href="install-mobile.html" style="color:var(--brand);font-weight:600;">点此打开手机版教程</a>（需 Kiwi 浏览器）<br>
       iPhone 暂不支持（苹果系统限制）。</p>
     </div>
 
@@ -71,10 +71,12 @@
 
 <script>
 (function(){
-  const EXT_VERSION = '3.3.0';
-  const BUCKET = 'https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd';
+  // 插件版本：下载链接由此拼出（与本页同级的 zip，勿加 releases/ 前缀）
+  const EXT_VERSION = '3.3.1';
+  const BUCKET = 'https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd'; // zip/安装器在 Supabase bucket，页面在 CDN，需绝对地址
   const ZIP_NAME = "crowd-extension-v" + EXT_VERSION + ".zip";
 
+  // 页面静态下载链接统一由 EXT_VERSION 重建（同级路径）
   const dlLink = document.getElementById("dlLink");
   dlLink.href = BUCKET + '/' + ZIP_NAME;
   dlLink.setAttribute("download", ZIP_NAME);
