@@ -182,6 +182,19 @@ async function loadTarget() {
   }
   if (!d.ok) {
     target = null;
+    if (d.reason === "participant_unavailable") {
+      // 编号在服务端不存在/被停用（如被清理）→ 给出重新注册出口
+      $("targetBox").textContent = "编号已失效";
+      $("taskMeta").innerHTML = "当前编号（" + pid + "）在服务端不存在。" +
+        '<a href="#" id="rejoin" style="color:var(--brand);font-weight:600">点这里重新获取编号</a>';
+      document.getElementById("rejoin").onclick = (e) => {
+        e.preventDefault();
+        localStorage.removeItem("participant_id");
+        location.reload();
+      };
+      $("card-submit").classList.add("hidden");
+      return;
+    }
     $("targetBox").textContent = "暂时没有可分配的目标";
     $("taskMeta").textContent = "（" + (d.reason || "未知") + "）点刷新重试；全部完成时也会显示在这里。";
     $("card-submit").classList.add("hidden");
