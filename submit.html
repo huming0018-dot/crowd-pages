@@ -32,11 +32,18 @@
   .spin{display:inline-block;width:12px;height:12px;border:2px solid #d1d5db;border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle;margin-right:4px}
   @keyframes sp{to{transform:rotate(360deg)}}
   .skip-link{display:block;text-align:center;font-size:13px;color:var(--sub);margin-top:10px;text-decoration:underline}
+  .banner{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:10px;font-size:14px;line-height:1.7;margin-bottom:14px}
 </style>
 </head>
 <body>
 <h1>🍜 众包美食家 · 手机提交</h1>
 <p class="sub">任务由中枢自动分配，你只管采集提交，不用做任何选择。</p>
+
+<div class="banner hidden" id="apiBanner">
+  ⚠️ <b>当前浏览器连不上服务器</b>（某些应用内置浏览器会拦截）。<br>
+  请点浏览器菜单选择「<b>用 Safari / Chrome 打开</b>」本页；或切换 WiFi/流量后
+  <a href="javascript:location.reload()" style="color:#991b1c;font-weight:600">点这里重试</a>。
+</div>
 
 <!-- ① 身份 -->
 <div class="card" id="card-id">
@@ -86,8 +93,8 @@ const API_BASE = "https://bdwrhshgdeghgyzwpxnl.supabase.co";
 const API_KEY = "sb_publishable_c93XenGzZsoa308e3bTg6A__lfaqQ-B";
 const $ = (id) => document.getElementById(id);
 const PID_RE = /^P-[A-Z0-9]{6,12}$/;
-let target = null;
-let resolved = null;
+let target = null;   // 中枢分配的当前目标 {task_id, kw_index, keyword, kpi_min, accepted, lease_until}
+let resolved = null; // {note_id, canonical_url}
 const skipped = new Set(JSON.parse(localStorage.getItem("kw_skipped") || "[]"));
 
 function toast(el, cls, html) { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; el.innerHTML = ""; el.appendChild(d); }
@@ -100,9 +107,16 @@ async function rpc(fn, body, timeoutMs) {
       headers: {"Content-Type":"application/json","apikey":API_KEY,"Authorization":"Bearer "+API_KEY},
       body: JSON.stringify(body), signal: ctl.signal
     });
-    return { httpOk: r.ok, data: await r.json().catch(() => null) };
-  } catch (e) { return { httpOk: false, data: null }; }
+    return { httpOk: r.ok, status: r.status, data: await r.json().catch(() => null) };
+  } catch (e) { return { httpOk: false, status: 0, data: null, network: true, error: String(e) }; }
   finally { clearTimeout(timer); }
+}
+// 把失败原因翻译成人话：网络层失败（浏览器/网络到不了服务器）和服务端业务错误分开
+function failText(r, fallback) {
+  if (r.network) return "网络连接失败：当前浏览器或网络连不上服务器。\n请①点浏览器菜单「用 Safari / Chrome 打开」本页，或②切换 WiFi/流量后重试。";
+  const d = r.data || {};
+  const detail = d.message || d.hint || d.reason || "";
+  return (fallback || "操作失败") + (detail ? "：" + detail : "") + (r.status ? "（HTTP " + r.status + "）" : "");
 }
 function extractDirect(url) {
   const m = url.match(/xiaohongshu\.com\/(?:explore|discovery\/item)\/([0-9a-zA-Z]+)/);
@@ -114,6 +128,7 @@ function extractAnyUrl(text) {
 }
 function seqKey() { return "proof_seq_" + target.task_id + "_" + target.kw_index; }
 
+// ---------- ① 编号 ----------
 function setPidUI(pid) {
   $("pidStatus").textContent = pid;
   $("pidForm").classList.add("hidden");
@@ -140,10 +155,11 @@ $("join").onclick = async () => {
     if (pid && PID_RE.test(pid)) {
       localStorage.setItem("participant_id", pid);
       setPidUI(pid); loadTarget();
-    } else { alert("注册失败：" + JSON.stringify(d)); }
+    } else { alert(failText(r, "注册失败")); }
   } finally { btn.disabled = false; btn.textContent = "我要加入（点一下自动获得编号）"; }
 };
 
+// ---------- ② 中枢分配目标 ----------
 $("refresh").onclick = loadTarget;
 $("skipKw").onclick = () => {
   if (!target) return;
@@ -158,6 +174,12 @@ async function loadTarget() {
   $("targetBox").innerHTML = '<span class="spin"></span>正在问中枢要目标…';
   const r = await rpc("crowd_next_target", { p_participant_id: pid, p_exclude: [...skipped] });
   const d = r.data || {};
+  if (r.network) {
+    target = null;
+    $("targetBox").textContent = "连不上服务器";
+    $("taskMeta").textContent = "当前浏览器/网络无法连接服务器。请用系统浏览器（Safari/Chrome）打开本页，或切换 WiFi/流量后点刷新。";
+    return;
+  }
   if (!d.ok) {
     target = null;
     $("targetBox").textContent = "暂时没有可分配的目标";
@@ -173,6 +195,7 @@ async function loadTarget() {
   $("card-submit").classList.remove("hidden");
 }
 
+// ---------- 链接解析（粘贴即触发） ----------
 let parseTimer = null;
 $("noteUrl").addEventListener("input", () => {
   resolved = null; $("submit").disabled = true;
@@ -210,6 +233,7 @@ async function autoResolve() {
   $("parseStatus").innerHTML = "❌ 只支持小红书链接：xiaohongshu.com 笔记网址，或 App 分享的 xhslink.com 短链。";
 }
 
+// ---------- ③ 提交 ----------
 $("submit").onclick = async () => {
   const pid = localStorage.getItem("participant_id");
   if (!target) { alert("中枢还没分配目标，点②的刷新"); return; }
@@ -249,13 +273,14 @@ $("submit").onclick = async () => {
         (d.task_status === "fulfilled" ? "<br>🎉 任务全部完成！" : ""));
       $("noteUrl").value = ""; $("noteTitle").value = ""; $("noteExcerpt").value = "";
       $("parseStatus").innerHTML = ""; resolved = null;
-      loadTarget();
+      loadTarget(); // 自动问中枢要下一个目标
     } else {
-      toast($("result"), "err-note", "❌ 未入库：" + (d.reason || "HTTP 错误") + "<br>可稍后重试，不会重复计酬。");
+      toast($("result"), "err-note", "❌ " + failText(r, "未入库") + "<br>可稍后重试，不会重复计酬。");
     }
   } finally { btn.disabled = !resolved; btn.textContent = "提交这条笔记"; }
 };
 
+// ---------- PWA：注册 SW + 安装提示 + 分享直达 ----------
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
@@ -270,6 +295,7 @@ $("installApp").onclick = async () => {
   }
 };
 
+// 分享直达：从小红书 App 分享过来时，自动 取分享文本 → 解析 → 提交到当前分配目标
 async function drainShare() {
   if (!location.search.includes("share=1")) return;
   try {
@@ -292,9 +318,16 @@ async function drainShare() {
     await autoResolve();
     if (resolved) $("submit").click();
     else toast($("result"), "err-note", "❌ 分享内容里没解析出笔记链接，请手动粘贴一次。");
-  } catch (e) { }
+  } catch (e) { /* 静默：用户仍可手动粘贴 */ }
 }
 
+// ---------- 启动 ----------
+// 打开页面先探测服务器连通性：失败则亮出醒目提示条（内置浏览器拦截是常见原因）
+async function pingApi() {
+  const r = await rpc("crowd_status_summary", {}, 8000);
+  if (r.network) $("apiBanner").classList.remove("hidden");
+}
+pingApi();
 const pid = localStorage.getItem("participant_id");
 if (pid && PID_RE.test(pid)) {
   setPidUI(pid);
