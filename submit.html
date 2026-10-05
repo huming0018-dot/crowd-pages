@@ -127,6 +127,21 @@ function extractAnyUrl(text) {
   return m ? m[0] : null;
 }
 function seqKey() { return "proof_seq_" + target.task_id + "_" + target.kw_index; }
+// 从分享文本提取标题：优先《…》，其次首条非链接行的前 50 字（去前导数字/表情/标点）
+function extractTitle(text) {
+  if (!text) return "";
+  const m = text.match(/《(.{2,50}?)》/);
+  if (m) return m[1].trim();
+  const lines = text.split(/\n+/).map(l => l.replace(/https?:\/\/\S+/g, "").trim())
+    .filter(l => l.length >= 4 && !/^\d+$/.test(l) && !/复制|打开|小红书App/i.test(l));
+  if (!lines.length) return "";
+  return lines[0].replace(/^[\d\s\.、，。:：\-—\[\]【】]+/, "").slice(0, 50).trim();
+}
+function prefillTitle(text) {
+  if ($("noteTitle").value.trim()) return;
+  const t = extractTitle(text);
+  if (t) $("noteTitle").value = t;
+}
 
 // ---------- ① 编号 ----------
 function setPidUI(pid) {
@@ -218,6 +233,7 @@ $("noteUrl").addEventListener("input", () => {
 async function autoResolve() {
   const raw = $("noteUrl").value.trim();
   if (!raw) { $("parseStatus").innerHTML = ""; return; }
+  prefillTitle(raw);
   const url = extractAnyUrl(raw) || raw;
   const direct = extractDirect(url);
   if (direct) {
