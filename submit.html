@@ -70,7 +70,7 @@
 <div class="card hidden" id="card-submit">
   <h2>③ 粘贴笔记链接</h2>
   <div class="steps">
-    <b>最简单的方法（推荐）</b>：在本浏览器<b>新开一个标签页</b>打开 <b>m.xiaohongshu.com</b>（登录一次）→ 搜索上方目标店名 → 打开一篇笔记 → <b>直接复制地址栏网址</b> → 回来粘贴。<br>
+    <b>最简单的方法（推荐）</b>：在本浏览器<b>新开一个标签页</b>打开 <b>m.xiaohongshu.com</b>（不用登录）→ 搜索上方目标店名 → 打开一篇笔记 → <b>直接复制地址栏网址</b> → 回来粘贴。<br>
     从小红书 App 分享也可以：复制分享链接粘贴到下面，会自动解析（等几秒）。
   </div>
   <input id="noteUrl" placeholder="粘贴笔记网址或分享文本">
@@ -226,7 +226,7 @@ async function autoResolve() {
     $("submit").disabled = false;
     return;
   }
-  if (/^https?:\/\/(www\.)?xhslink\.com\//.test(url)) {
+  if (/^https?:\/\/(www\.)?xhslink\.(com|cn)\//.test(url)) {
     $("parseStatus").innerHTML = '<span class="spin"></span>正在解析短链（几秒到十几秒）…';
     const r = await rpc("crowd_resolve_link", { p_input: url }, 45000);
     const d = r.data || {};
@@ -236,14 +236,14 @@ async function autoResolve() {
       $("parseStatus").innerHTML = "✅ 已解析笔记 <code>" + d.note_id + "</code>";
       $("submit").disabled = false;
     } else {
-      const hint = d.reason === "resolve_timeout" ? "解析超时，请改用上方推荐方法（浏览器里打开小红书直接复制网址）"
-        : d.reason === "no_note_id" ? "这个链接没指向具体笔记（" + (d.final_url || "") + "）"
-        : "无法解析（" + (d.reason || "网络") + "），建议用上方推荐方法";
-      $("parseStatus").innerHTML = "❌ " + hint;
+      // 自动解析失败 → 给一键降级路径：新标签页打开短链，落地后复制地址栏回来粘贴
+      $("parseStatus").innerHTML = "❌ 自动解析失败（" + (d.reason || "网络") + "）。" +
+        '<br><a href="' + url + '" target="_blank" rel="noopener" style="color:var(--brand);font-weight:600">👉 点我打开这条分享链接</a>' +
+        "：新标签页里等它跳转完，<b>复制地址栏网址</b>回这里粘贴即可（本页进度都在）。";
     }
     return;
   }
-  $("parseStatus").innerHTML = "❌ 只支持小红书链接：xiaohongshu.com 笔记网址，或 App 分享的 xhslink.com 短链。";
+  $("parseStatus").innerHTML = "❌ 只支持小红书链接：xiaohongshu.com 笔记网址，或 App 分享的 xhslink.com / xhslink.cn 短链。";
 }
 
 // ---------- ③ 提交 ----------
