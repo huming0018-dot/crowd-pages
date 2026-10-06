@@ -65,6 +65,7 @@ async function load() {
   try {
     const r = await fetch(API_BASE + "/rest/v1/rpc/crowd_status_summary", {
       method: "POST",
+      cache: "no-store",
       headers: {"Content-Type":"application/json","apikey":API_KEY,"Authorization":"Bearer "+API_KEY},
       body: "{}"
     });
@@ -97,6 +98,9 @@ async function load() {
 }
 load();
 setInterval(load, 60000);
+// 手机浏览器会冻结后台标签页的定时器——回到前台立即刷新，不等下一分钟
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+window.addEventListener("pageshow", (e) => { if (e.persisted) load(); }); // bfcache 恢复时刷新
 })();
 </script>
 </body>
