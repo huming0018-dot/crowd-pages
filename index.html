@@ -52,12 +52,12 @@
     // 手机：免安装网页就是主路径（一键）
     $("detected").textContent = isAndroid ? "检测到：安卓手机" : "检测到：iPhone / iPad";
     show('<a class="btn" href="submit.html">🚀 开始参与（免安装）</a>' +
-         (isAndroid ? '<a class="btn alt" href="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-extension-v3.4.1-firefox-signed.xpi">想要全自动？装 Firefox 后点这里一键装插件</a>'
+         (isAndroid ? '<a class="btn alt" href="install-mobile.html">想要全自动？点这里看安卓插件安装（狐猴浏览器）</a>'
                     : ''));
     steps('<div class="step">① 点上面的橙色按钮</div>' +
           '<div class="step">② 点「我要加入」领编号</div>' +
           '<div class="step">③ 按页面派的店找笔记提交，完成</div>' +
-          (isAndroid ? '<div class="note">安卓用户装 Firefox 浏览器后点第二个按钮，可一键装插件实现全自动采集。</div>'
+          (isAndroid ? '<div class="note">安卓用户点第二个按钮，可按引导装插件实现全自动采集（狐猴浏览器）。</div>'
                      : '<div class="note">iPhone：点 Safari 底部的「分享」按钮 →「添加到主屏幕」，之后从桌面图标直达提交页。</div>'));
   } else if (isMac) {
     $("detected").textContent = "检测到：Mac 电脑";
