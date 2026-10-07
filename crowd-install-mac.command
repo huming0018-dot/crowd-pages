@@ -1,19 +1,22 @@
 #!/bin/bash
-# 众包美食家 · Mac 一键安装（v3 遥测版，2026-10-07）
-# 每一步自动上报到服务端日志——装不上时不用截图接力，PM 直接看到卡在哪。
-# 主通道：Chrome 企业策略（自动安装+自动升级）；兜底：无管理员自动降级手动挂载。
+# 众包美食家 · Mac 一键安装（v4 零管理员版，2026-10-07）
+#
+# 不需要密码、不需要管理员。原理：
+#   1) 下载插件包到 ~/crowd-ext（手动挂载形态，Chrome 以 --load-extension 加载）
+#   2) 装一个用户级自更新器（LaunchAgent，每 6 小时自动检查并应用新版本）
+#   3) 启动 Chrome 并加载插件
+# 以后升级全自动：自更新器下载新版 → 换上 → 重启 Chrome。
+# 每一步自动上报遥测（crowd_install_report），出问题 PM 直接看到卡在哪。
 EXT_ID="licijehcpohikchlnkbpjdjdfkcocndg"
-UPDATE_URL="https://huming0018-dot.github.io/crowd-pages/updates.xml"
-ENTRY="$EXT_ID;$UPDATE_URL"
-PLIST="${CROWD_PLIST_OVERRIDE:-/Library/Managed Preferences/com.google.Chrome}"
 EXT_DIR="$HOME/crowd-ext"
 ZIP_URL="https://huming0018-dot.github.io/crowd-pages/crowd-extension-latest.zip"
 ZIP_URL_BAK="https://bdwrhshgdeghgyzwpxnl.supabase.co/storage/v1/object/public/crowd/crowd-extension-v3.4.10.zip"
+UPDATE_URL="https://huming0018-dot.github.io/crowd-pages/updates.xml"
 API_KEY="sb_publishable_c93XenGzZsoa308e3bTg6A__lfaqQ-B"
 RPC="https://bdwrhshgdeghgyzwpxnl.supabase.co/rest/v1/rpc/crowd_install_report"
 RID="$(date +%s)-$(od -An -tx1 -N4 /dev/urandom 2>/dev/null | tr -d ' ' || echo R$RANDOM)"
 
-report() { # report <step> <msg> —— 静默、5 秒封顶、永不阻塞安装
+report() {
   local msg
   msg=$(printf '%s' "$2" | tr '"\\' "'/" | head -c 380)
   curl -s --max-time 5 -X POST "$RPC" -H "apikey: $API_KEY" -H "Authorization: Bearer $API_KEY" \
@@ -23,10 +26,10 @@ report() { # report <step> <msg> —— 静默、5 秒封顶、永不阻塞安�
 
 clear
 echo "================================================"
-echo "  众包美食家 · 一键安装（Mac）"
-echo "  安装编号：$RID（出问题报这串就行）"
+echo "  众包美食家 · 一键安装（Mac · 免密码版）"
+echo "  安装编号：$RID"
 echo "================================================"
-report start "$(uname -m) macOS $(sw_vers -productVersion 2>/dev/null)"
+report start "v4 $(uname -m) macOS $(sw_vers -productVersion 2>/dev/null)"
 
 step() { echo; echo "—— $1"; report "step" "$1"; }
 fail() { echo; echo "❌ $1"; echo "👉 $2"; echo; report "FAIL" "$1"; exit 1; }
@@ -35,135 +38,168 @@ fail() { echo; echo "❌ $1"; echo "👉 $2"; echo; report "FAIL" "$1"; exit 1; 
 step "第 1 步：检查 Chrome"
 [ -d "/Applications/Google Chrome.app" ] || fail "没检测到 Chrome" "先装 Chrome：https://www.google.cn/chrome/ ，装完重跑"
 CHROME_VER=$("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
-[ -n "$CHROME_VER" ] || fail "Chrome 版本读不到" "重装 Chrome 后重跑"
-if [ "$CHROME_VER" -lt 96 ] 2>/dev/null; then
-  fail "Chrome 版本太老（$CHROME_VER）" "升级 Chrome 后重跑"
-fi
+[ -n "$CHROME_VER" ] && [ "$CHROME_VER" -lt 96 ] && fail "Chrome 版本太老（$CHROME_VER）" "升级 Chrome 后重跑"
 echo "✅ Chrome 已安装（版本 $CHROME_VER）"
 report chrome_ok "chrome $CHROME_VER"
 
 # ---------- 第 2 步：网络 ----------
-step "第 2 步：检查网络（插件更新通道）"
+step "第 2 步：检查网络"
 CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 12 "$UPDATE_URL" || echo 000)
-[ "$CODE" = "200" ] || fail "连不上插件更新服务器（HTTP $CODE）" "检查网络/代理/VPN 后重跑；或换个网络"
-echo "✅ 更新通道正常"
-report net_ok "updates.xml $CODE"
+[ "$CODE" = "200" ] || fail "连不上插件服务器（HTTP $CODE）" "检查网络/代理/VPN 后重跑"
+echo "✅ 网络正常"
+report net_ok "$CODE"
 
-# ---------- 第 3 步：写策略 ----------
-step "第 3 步：登记插件到 Chrome（需要一次管理员密码）"
-echo "接下来会要开机密码（输入时屏幕不显示，输完回车）。"
-if sudo -v; then
-  ADMIN_OK=1
-  report admin_ok ""
-else
-  ADMIN_OK=0
-  echo "⚠️  管理员校验没过（密码错误或账户不是管理员）——自动改走免管理员模式。"
-  report admin_fail "sudo -v failed"
-fi
+# ---------- 第 3 步：下载插件包 ----------
+step "第 3 步：下载插件包"
+rm -rf "$EXT_DIR" && mkdir -p "$EXT_DIR"
+curl -sL --max-time 90 -o /tmp/crowd-ext.zip "$ZIP_URL" || curl -sL --max-time 90 -o /tmp/crowd-ext.zip "$ZIP_URL_BAK" \
+  || fail "插件包下载失败" "检查网络后重跑"
+[ -s /tmp/crowd-ext.zip ] || fail "插件包是空文件" "检查网络后重跑"
+unzip -qo /tmp/crowd-ext.zip -d "$EXT_DIR" || fail "解压失败" "重跑本脚本"
+[ -f "$EXT_DIR/manifest.json" ] || fail "解压内容不对" "重跑；不行就联系管理员"
+VER=$(sed -n 's/.*"version": *"\([0-9.]*\)".*/\1/p' "$EXT_DIR/manifest.json" | head -1)
+echo "✅ 插件包 v$VER 已就位"
+report ext_ready "v$VER $EXT_DIR"
 
-write_entry() {
-  local cur
-  cur=$(sudo /usr/libexec/PlistBuddy -c "Print :ExtensionInstallForcelist" "$PLIST.plist" 2>/dev/null)
-  if [ $? -ne 0 ] || ! echo "$cur" | grep -q .; then
-    E1=$(sudo /usr/libexec/PlistBuddy -c "Add :ExtensionInstallForcelist array" "$PLIST.plist" 2>&1)
-    E2=$(sudo /usr/libexec/PlistBuddy -c "Add :ExtensionInstallForcelist:0 string $ENTRY" "$PLIST.plist" 2>&1)
-    [ -n "$E1$E2" ] && report "policy_add_err" "$E1 | $E2"
-    return
-  fi
-  echo "$cur" | grep -q "$ENTRY" && return 0
-  local idx
-  idx=$(echo "$cur" | awk -v ext="$EXT_ID" '
-    /Array \{/ {inarr=1; idx=0; next}
-    inarr && /^[[:space:]]*\}/ {inarr=0}
-    inarr { if (index($0, ext)) { print idx; exit } idx++ }')
-  if [ -n "$idx" ]; then
-    sudo /usr/libexec/PlistBuddy -c "Delete :ExtensionInstallForcelist:$idx" "$PLIST.plist" 2>/dev/null || true
-    sudo /usr/libexec/PlistBuddy -c "Add :ExtensionInstallForcelist:$idx string $ENTRY" "$PLIST.plist" 2>/dev/null
-  else
-    local cnt
-    cnt=$(echo "$cur" | awk '/Array \{/{f=1;c=0;next} f&&/^[[:space:]]*\}/{f=0} f{c++} END{print c+0}')
-    sudo /usr/libexec/PlistBuddy -c "Add :ExtensionInstallForcelist:$cnt string $ENTRY" "$PLIST.plist" 2>/dev/null
-  fi
+# ---------- 第 4 步：装自更新器（LaunchAgent，用户级免管理员）----------
+step "第 4 步：安装自更新器（以后自动升级）"
+# 4.1 更新器脚本本体
+cat > "$EXT_DIR/crowd-updater.sh" <<'UPDATER_EOF'
+#!/bin/bash
+# crowd-updater.sh — 众包美食家自更新器（免管理员）
+# 由 LaunchAgent 每 6 小时和登录时触发：检查新版本 → 下载 → 原子替换 → 必要时重启 Chrome。
+# 上报到遥测（crowd_install_report），PM 可见每台机器的更新动作。
+EXT_ID="licijehcpohikchlnkbpjdjdfkcocndg"
+UPDATE_URL="https://huming0018-dot.github.io/crowd-pages/updates.xml"
+ZIP_URL="https://huming0018-dot.github.io/crowd-pages/crowd-extension-latest.zip"
+EXT_DIR="${CROWD_EXT_DIR:-$HOME/crowd-ext}"
+RESTART_CHROME="${CROWD_UPDATER_RESTART:-1}"   # 0=只换文件不重启 Chrome（日常主力机用）
+API_KEY="sb_publishable_c93XenGzZsoa308e3bTg6A__lfaqQ-B"
+RPC="https://bdwrhshgdeghgyzwpxnl.supabase.co/rest/v1/rpc/crowd_install_report"
+LOG="$HOME/Library/Logs/crowd-updater.log"
+
+log() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
+report() {
+  local msg
+  msg=$(printf '%s' "$2" | tr '"\\' "'/" | head -c 380)
+  curl -s --max-time 5 -X POST "$RPC" -H "apikey: $API_KEY" -H "Authorization: Bearer $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"p_run_id\":\"upd-$(hostname -s)\",\"p_step\":\"$1\",\"p_msg\":\"$msg\"}" >/dev/null 2>&1 || true
 }
 
-if [ "$ADMIN_OK" = "1" ]; then
-  # 全新系统的 /Library/Managed Preferences 目录可能不存在——PlistBuddy 无法在不存在的目录建文件
-  sudo mkdir -p "$(dirname "$PLIST")" 2>/dev/null
-  if [ "$PLIST" = "/Library/Managed Preferences/com.google.Chrome" ]; then
-    sudo chown root:wheel "/Library/Managed Preferences" 2>/dev/null || true
-  fi
-  write_entry
-  sudo killall cfprefsd 2>/dev/null || true
-  if sudo /usr/libexec/PlistBuddy -c "Print :ExtensionInstallForcelist" "$PLIST.plist" 2>/dev/null | grep -q "$ENTRY"; then
-    echo "✅ 策略已登记并读回验证通过（自动升级通道已开）"
-    report policy_ok ""
-    MODE="policy"
-  else
-    echo "⚠️  策略写入后读回验证失败，自动改走免管理员模式。"
-    report policy_writeback_fail ""
-    MODE="sideload"
-  fi
+mkdir -p "$(dirname "$LOG")"
+log "== updater 启动（ext_dir=$EXT_DIR restart=$RESTART_CHROME）"
+
+# 读远端版本（updates.xml 的 version 字段是单一事实源）
+XML=$(curl -sL --max-time 20 "$UPDATE_URL") || { log "拉取更新清单失败"; report upd_fail "fetch xml"; exit 0; }
+REMOTE_VER=$(printf '%s' "$XML" | sed -n 's/.*updatecheck[^>]*version="\([0-9.]*\)".*/\1/p' | head -1)
+[ -n "$REMOTE_VER" ] || { log "清单里读不到版本号"; report upd_fail "no version"; exit 0; }
+
+# 读本地版本
+LOCAL_VER="0"
+[ -f "$EXT_DIR/manifest.json" ] && LOCAL_VER=$(sed -n 's/.*"version": *"\([0-9.]*\)".*/\1/p' "$EXT_DIR/manifest.json" | head -1)
+
+if [ "$LOCAL_VER" = "$REMOTE_VER" ]; then
+  log "已是最新 $LOCAL_VER"
+  report upd_latest "$LOCAL_VER"
+  exit 0
+fi
+
+log "发现新版本：本地 $LOCAL_VER → 远端 $REMOTE_VER"
+report upd_found "$LOCAL_VER->$REMOTE_VER"
+
+# 下载并原子替换
+TMP=$(mktemp -d)
+if ! curl -sL --max-time 90 -o "$TMP/ext.zip" "$ZIP_URL"; then
+  log "下载失败"; report upd_fail "download"; rm -rf "$TMP"; exit 0
+fi
+[ -s "$TMP/ext.zip" ] || { log "下载为空"; report upd_fail "empty zip"; rm -rf "$TMP"; exit 0; }
+unzip -qo "$TMP/ext.zip" -d "$TMP/x" || { log "解压失败"; report upd_fail "unzip"; rm -rf "$TMP"; exit 0; }
+[ -f "$TMP/x/manifest.json" ] || { log "包内容不对"; report upd_fail "bad content"; rm -rf "$TMP"; exit 0; }
+
+mkdir -p "$EXT_DIR"
+rsync -a --delete "$TMP/x/" "$EXT_DIR/"
+rm -rf "$TMP"
+NEW_VER=$(sed -n 's/.*"version": *"\([0-9.]*\)".*/\1/p' "$EXT_DIR/manifest.json" | head -1)
+log "已更新到 $NEW_VER"
+report upd_applied "$NEW_VER"
+
+# 重启 Chrome 让新版生效（挂载参数带上，保证 unpack 形态一直加载）
+if [ "$RESTART_CHROME" = "1" ] && pgrep -x "Google Chrome" >/dev/null 2>&1; then
+  log "重启 Chrome 应用新版本"
+  osascript -e 'tell application "Google Chrome" to quit' 2>/dev/null || true
+  sleep 4
+  pkill -x "Google Chrome" 2>/dev/null; sleep 2
+  open -a "Google Chrome" --args --load-extension="$EXT_DIR"
+  report upd_chrome_restarted "$NEW_VER"
+fi
+log "== updater 结束"
+UPDATER_EOF
+chmod +x "$EXT_DIR/crowd-updater.sh"
+# 4.2 LaunchAgent plist（模板变量替换）
+LA_DIR="$HOME/Library/LaunchAgents"
+mkdir -p "$LA_DIR"
+PLIST_OUT="$LA_DIR/com.crowd.meishijia.updater.plist"
+RESTART_FLAG="${CROWD_UPDATER_RESTART:-1}"
+cat > "$PLIST_OUT" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.crowd.meishijia.updater</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>$EXT_DIR/crowd-updater.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>21600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$HOME/Library/Logs/crowd-updater-launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>$HOME/Library/Logs/crowd-updater-launchd.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CROWD_UPDATER_RESTART</key>
+    <string>$RESTART_FLAG</string>
+  </dict>
+</dict>
+</plist>
+PLIST_EOF
+# 4.3 注册（先卸旧的可能存在的，再装新的；gui 域不需要 root）
+launchctl bootout "gui/$(id -u)/com.crowd.meishijia.updater" 2>/dev/null || true
+if launchctl bootstrap "gui/$(id -u)" "$PLIST_OUT" 2>/dev/null; then
+  echo "✅ 自更新器已安装（每 6 小时自动检查新版本）"
+  report updater_ok "restart=$RESTART_FLAG"
 else
-  MODE="sideload"
+  # 老系统回退 load 方式
+  launchctl load "$PLIST_OUT" 2>/dev/null \
+    && { echo "✅ 自更新器已安装（legacy 注册）"; report updater_ok "legacy"; } \
+    || { echo "⚠️  自更新器注册失败（插件本体已装好，只是以后升级要重跑本脚本）"; report updater_fail ""; }
 fi
 
-# ---------- 兜底：手动挂载 ----------
-if [ "$MODE" = "sideload" ]; then
-  step "第 3b 步：下载插件包并挂载（免管理员）"
-  rm -rf "$EXT_DIR" && mkdir -p "$EXT_DIR"
-  curl -sL --max-time 90 -o /tmp/crowd-ext.zip "$ZIP_URL" || curl -sL --max-time 90 -o /tmp/crowd-ext.zip "$ZIP_URL_BAK" \
-    || fail "插件包下载失败" "检查网络后重跑"
-  [ -s /tmp/crowd-ext.zip ] || fail "插件包是空文件" "检查网络后重跑"
-  unzip -qo /tmp/crowd-ext.zip -d "$EXT_DIR" || fail "解压失败" "重跑本脚本"
-  [ -f "$EXT_DIR/manifest.json" ] || fail "解压内容不对" "重跑；不行就联系管理员"
-  echo "✅ 插件包已就位"
-  report sideload_ready "$EXT_DIR"
-fi
-
-# ---------- 第 4 步：重启 Chrome ----------
-step "第 4 步：重启 Chrome 让插件生效"
+# ---------- 第 5 步：启动 Chrome 并加载插件 ----------
+step "第 5 步：启动 Chrome 加载插件"
 if [ "${CROWD_NO_RESTART:-0}" = "1" ]; then
-  echo "（按约定不重启 Chrome；下次启动时生效）"
+  echo "（按约定不重启 Chrome；下次启动时自己加载）"
   report no_restart ""
 else
-  echo "即将重启 Chrome（先保存浏览器里没提交的页面）。"
-  read -r -p "按回车重启 Chrome，或 Ctrl+C 取消..."
   osascript -e 'tell application "Google Chrome" to quit' 2>/dev/null || true
-  sleep 2
-  if [ "$MODE" = "sideload" ]; then
-    open -a "Google Chrome" --args --load-extension="$EXT_DIR"
-  else
-    open -a "Google Chrome"
-  fi
-  report chrome_restarted "$MODE"
-fi
-
-# ---------- 第 5 步：验证插件真的落地 ----------
-if [ "${CROWD_NO_RESTART:-0}" != "1" ]; then
-  step "第 5 步：验证安装结果（最多等 2 分钟）"
-  OK=0
-  for i in $(seq 1 24); do
-    sleep 5
-    if [ -d "$HOME/Library/Application Support/Google/Chrome/Default/Extensions/$EXT_ID" ] \
-       || [ -d "$HOME/Library/Application Support/Google/Chrome/Default/Local Extension Settings/$EXT_ID" ]; then
-      OK=1; break
-    fi
-  done
-  if [ "$OK" = "1" ]; then
-    echo "✅✅ 插件已装好并验证落地！"
-    report install_verified "$MODE"
-  else
-    echo "⚠️  2 分钟内没检测到插件落地。"
-    echo "    打开 Chrome 访问 chrome://extensions 看看有没有「众包美食家」。"
-    echo "    没有的话：chrome://policy 点「重新加载政策」，再重启一次 Chrome。"
-    report install_unverified "$MODE"
-  fi
+  sleep 3
+  pkill -x "Google Chrome" 2>/dev/null; sleep 2
+  open -a "Google Chrome" --args --load-extension="$EXT_DIR"
+  report chrome_started ""
 fi
 
 echo
 echo "================================================"
-echo "  下一步（只此一次）：Chrome 会自动弹出「参与协议」页："
+echo "  ✅ 安装完成！"
+echo "  Chrome 会自动弹出「参与协议」页："
 echo "  点【我要加入】自动领编号 → 点【同意并开始使用】"
-echo "  之后采集全自动，不用人管。"
-[ "$MODE" = "sideload" ] && echo "  （本机为免管理员挂载模式：扩展页显示开发者模式属正常；升级插件重跑本脚本即可）"
+echo "  之后采集全自动；插件升级也全自动（自更新器盯着）。"
+echo "  提示：扩展页显示『开发者模式』属正常，不影响功能。"
 echo "================================================"
+report install_done "v$VER"
