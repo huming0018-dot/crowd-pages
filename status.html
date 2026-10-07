@@ -138,7 +138,7 @@ async function load() {
     (d.recent || []).forEach(x => {
       const prev = merged[merged.length - 1];
       const sameMin = prev && prev.store === (x.matched_store || "—") &&
-        prev.pid === x.participant_id && prev.status === x.gate_status &&
+        prev.pid === (x.participant_id || '').slice(0, 9) && prev.status === x.gate_status &&
         (new Date(x.created_at) - new Date(prev.at)) < 10 * 60 * 1000;
       if (sameMin) { prev.n++; prev.at = x.created_at; }
       else merged.push({store: x.matched_store || "—", pid: (x.participant_id || "").slice(0, 9),
