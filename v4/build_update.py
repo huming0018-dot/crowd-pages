@@ -43,7 +43,7 @@ def build(source, output):
 <h1>更新已有插件至 {version}</h1><p>只用于之前已参加的原 Mac、Chrome/Edge 和个人资料。无需 Codex、不重新报名、不卸载。</p>
 <ol><li>运行本包更新命令，自动找到并更新原插件文件。</li><li>在自动打开的扩展管理页，点击本插件的刷新图标。</li><li>打开原插件，确认 {version}，点击继续采集。若要求登录小红书或处理验证，请本人处理后继续。</li></ol>
 <p>本包不含邀请、密码或参与身份。身份与进度保存在浏览器原插件存储，更新不删除。若未找到原 v4 安装会退出，不替用户创建新身份。</p>
-<p>本版修复网页脚本接入时机和导航后恢复，重试保留上一轮诊断；保留访问预算及风控暂停。中台负责检查新版诊断和实际回传；固定页面测试已通过，真实平台验收仍在进行。本次不扩大招募。</p></html>'''
+<p>本版在空白页跳转超时或浏览器跳转失败时停止，保留原页面、任务和证据，不再自动重复搜索。若原来已开启诊断，中台可区分空白文档与待跳转目标，不上传网址或正文。真实 Chrome 已验证停止逻辑，另一台设备的首次跳转故障及真实入库仍待核验。本次不扩大招募。</p></html>'''
     payload = {'插件/' + n: b for n, b in files.items()}
     payload.update({'prepare.command': launcher, '更新.command': wrapper, '先打开安装说明.html': guide.encode()})
     payload['SHA256SUMS.txt'] = ''.join(hashlib.sha256(b).hexdigest() + '  ' + n + '\n' for n, b in sorted(payload.items())).encode()
