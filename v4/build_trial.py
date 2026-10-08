@@ -66,7 +66,7 @@ def write_kit(source, pilot, output):
 <p>验收：确认收到任务和至少一条真实回传；关闭参与页/最小化窗口后仍执行；让 Mac 睡眠再唤醒、退出再打开浏览器，检查任务自动继续、证据未丢失；点击停止后重复唤醒/重启，确认仍保持停止。完成后告诉 Codex「已启动」，由中台核对真实记录及标准/非标字段。</p>
 <p>这是未上架、未经 Mac 实机验收的内部插件。若浏览器管理策略禁止加载，请保留提示，不修改系统或浏览器管理策略；联系 Codex。</p></html>'''
     guide=guide.replace('__VERSION__',html.escape(version))
-    guide=guide.replace('</h1>','</h1><p>本版 '+version+' 基础笔记先回传，评论后续补充；短正文不再误判加载失败。状态页可查看最近待处理原因。作者主页资料需另行勾选同意，主页访问共享预算并缓存。更新后可用原证据重新校验一次符合条件的相关性拒绝记录。核对中台回执后才移除待回传证据；配额不足保留原记录等候重置。继续不会清除冷却，验证码至少30分钟、限流至少24小时后仍需本人继续。</p>',1)
+    guide=guide.replace('</h1>','</h1><p>本版 '+version+' 基础笔记先回传，评论后续补充；短正文不再误判加载失败。状态页可查看最近待处理原因。登录帮助会保留原工作页，处理后点击继续；中台登录失效单独提示。修正嵌套详情布局与标题选择，状态、采集、诊断共用一次凭据刷新。作者主页资料需另行勾选同意，主页访问共享预算并缓存。更新后可用原证据重新校验一次符合条件的相关性拒绝记录。核对中台回执后才移除待回传证据；配额不足保留原记录等候重置。继续不会清除冷却，验证码至少30分钟、限流至少24小时后仍需本人继续。</p>',1)
     # The private invite changes config bytes, so update the delivered-file map.
     release['configuration_mode']='private_invite'
     release['files']={name:hashlib.sha256(data).hexdigest() for name,data in files.items() if name!='release.json'}
