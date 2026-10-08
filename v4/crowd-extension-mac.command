@@ -6,6 +6,8 @@ trap 'result=$?; if [ "$result" -ne 0 ]; then echo "准备未完成。请保留�
 [ "$(uname -s)" = Darwin ] || { echo '请在 Mac 上双击运行。'; exit 1; }
 kit_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$kit_dir"
+update_only=false
+case "${1:-}" in '') ;; --update-only) update_only=true ;; *) echo '不支持的更新参数'; exit 1 ;; esac
 echo '正在校验并准备轻量插件。无需管理员密码。'
 shasum -a 256 -c SHA256SUMS.txt >/dev/null
 extension_id=licijehcpohikchlnkbpjdjdfkcocndg
@@ -47,6 +49,9 @@ for browser in 'Google Chrome' 'Microsoft Edge'; do
   done
 done
 [ -n "$browser_app" ] || { echo '未找到 Chrome 或 Edge。请先安装其中一个浏览器，再双击本文件。'; exit 1; }
+if $update_only && [ -z "$installed_path" ]; then
+  echo '未找到这个浏览器个人资料里已安装的 v4 插件，未进行新安装或报名。请用最初参与时的 Mac 和浏览器。'; exit 1
+fi
 destination=${installed_path:-"$HOME/Library/Application Support/众包采集轻量/插件"}
 [ ! -L "$destination" ] || { echo '安装目录是链接，请联系 Codex 检查。'; exit 1; }
 if [ -e "$destination" ]; then
@@ -72,4 +77,8 @@ else
   echo '在扩展页开启「开发者模式」→「加载已解压的扩展程序」。'
   echo '选文件夹时按 Command+Shift+G，再按 Command+V、回车，点击「选择」。'
 fi
-echo '加载后勾选自愿参与并开始，按提示登录小红书。遇到管理策略拦截请保留提示。'
+if $update_only; then
+  echo '刷新后打开原插件，确认版本，再点击继续采集。遇到小红书登录或验证时，请本人处理后继续。不要重新报名。'
+else
+  echo '加载后勾选自愿参与并开始，按提示登录小红书。遇到管理策略拦截请保留提示。'
+fi
