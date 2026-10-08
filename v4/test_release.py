@@ -23,7 +23,8 @@ with tempfile.TemporaryDirectory() as directory:
   manifest=json.loads(z.read(prefix+'插件/manifest.json'));version=manifest['version'];worker=manifest['background']['service_worker']
   assert worker=='src/background_v'+version.replace('.','_')+'.js'
   assert 'update_url' not in manifest,'private v4 must never attach to legacy update channel'
-  assert z.read(prefix+'插件/'+worker)==(ext/'src/background.js').read_bytes()
+  assert z.read(prefix+'插件/src/background.js')==(ext/'src/background.js').read_bytes()
+  assert b"importScripts('background.js')" in z.read(prefix+'插件/'+worker)
   assert f"VERSION = '{version}'" in z.read(prefix+'插件/src/core.js').decode()
   assert version in z.read(prefix+'先打开安装说明.html').decode()
   release=json.loads(z.read(prefix+'插件/release.json'))

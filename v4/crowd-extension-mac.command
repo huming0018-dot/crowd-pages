@@ -8,6 +8,10 @@ kit_dir=$(cd "$(dirname "$0")" && pwd)
 cd "$kit_dir"
 update_only=false
 case "${1:-}" in '') ;; --update-only) update_only=true ;; *) echo '不支持的更新参数'; exit 1 ;; esac
+if [ -x "$kit_dir/updater/crowd-v4-updater" ]; then
+  mac_major=$(/usr/bin/sw_vers -productVersion | cut -d. -f1)
+  [ "$mac_major" -ge 14 ] || { echo '此自动更新助手需要 macOS 14 或更新版本，尚未改动原插件。'; exit 1; }
+fi
 echo '正在校验并准备轻量插件。无需管理员密码。'
 shasum -a 256 -c SHA256SUMS.txt >/dev/null
 extension_id=licijehcpohikchlnkbpjdjdfkcocndg
@@ -63,6 +67,10 @@ if [ -e "$destination" ]; then
 fi
 mkdir -p "$destination"
 cp -R "$kit_dir/插件/." "$destination/"
+if [ -x "$kit_dir/updater/crowd-v4-updater" ]; then
+  [ -n "$installed_path" ] || { echo '自动更新助手只接入原有 v4 安装。'; exit 1; }
+  "$kit_dir/updater/crowd-v4-updater" --install "$destination" "$(basename "$browser_app" .app)"
+fi
 printf '%s' "$destination" | pbcopy
 open -R "$destination/manifest.json"
 open "$kit_dir/先打开安装说明.html"

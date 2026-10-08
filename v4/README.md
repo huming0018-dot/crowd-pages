@@ -26,3 +26,11 @@ python3 v4/build_update.py --source /private/crowd-extension.zip --output v4/rel
 无邀请更新包可以提供给已有参与者，不能用它开放新报名。下载后运行更新助手，在自动打开的原扩展管理页确认刷新，再回到原插件继续；不能承诺解压扩展后台静默升级。管理员通过既有自愿诊断确认版本，再核对真实proof与证据字段，不要求参与者复制正文或接入Codex。
 
 4.1.3是空白导航失败时停止与诊断补充的候选包，尚未在故障设备验收。此更新包仍不提供自动升级；相关渠道审计与设计见 crowd-kol/docs/UPDATE_DIAGNOSTICS.md。
+
+## 4.2.0一次接通自动更新
+
+`build_bootstrap.py`组合canonical扩展与已编译通用Native Messaging助手，生成`releases/crowd-v4.2.0-bootstrap-mac.zip`。它只接续原v4目录，要求macOS 14+并保留开发者模式；用户接通并刷新一次，以后插件每小时校验签名清单、原子替换并只重载自己。可在插件关闭自动更新。无邀请、无新报名、无浏览器策略修改；增加的本机恢复任务只检查未确认更新，不联网或启动采集。
+
+构建：`python3 v4/build_bootstrap.py --source CANONICAL_ZIP --helper UNIVERSAL_HOST --output BOOTSTRAP_ZIP`；检查：`python3 v4/test_bootstrap.py CANONICAL_ZIP UNIVERSAL_HOST`。
+
+`channel.json`为签名发布清单，ZIP URL必须固定提交；不得上传签名私钥、混接根目录旧updates.xml或使用含邀请包。运行版本必须由客户端/宿主握手确认。4.2.0机制已在隔离Mac Chrome实测升级和坏代码回退；原设备首次接通与真实采集仍待验收。
