@@ -66,7 +66,7 @@ def write_kit(source, pilot, output):
 <p>验收：确认收到任务和至少一条真实回传；关闭参与页/最小化窗口后仍执行；让 Mac 睡眠再唤醒、退出再打开浏览器，检查任务自动继续、证据未丢失；点击停止后重复唤醒/重启，确认仍保持停止。完成后告诉 Codex「已启动」，由中台核对真实记录及标准/非标字段。</p>
 <p>这是未上架、未经 Mac 实机验收的内部插件。若浏览器管理策略禁止加载，请保留提示，不修改系统或浏览器管理策略；联系 Codex。</p></html>'''
     guide=guide.replace('__VERSION__',html.escape(version))
-    guide=guide.replace('</h1>','</h1><p>本版 '+version+' 预过滤已采笔记；暂无新结果时延后重试，先轮转其他任务。核对中台回执后才移除待回传证据；配额不足保留原记录等候重置。继续不会清除冷却，验证码至少30分钟、限流至少24小时后仍需本人继续。</p>',1)
+    guide=guide.replace('</h1>','</h1><p>本版 '+version+' 无新增评论时提前结束展开；调度按到期时间推进。状态页可查看最近待处理原因。预过滤已采笔记；暂无新结果时延后重试，先轮转其他任务。核对中台回执后才移除待回传证据；配额不足保留原记录等候重置。继续不会清除冷却，验证码至少30分钟、限流至少24小时后仍需本人继续。</p>',1)
     # The private invite changes config bytes, so update the delivered-file map.
     release['configuration_mode']='private_invite'
     release['files']={name:hashlib.sha256(data).hexdigest() for name,data in files.items() if name!='release.json'}
