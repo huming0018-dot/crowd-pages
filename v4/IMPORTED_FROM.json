@@ -1,0 +1,17 @@
+{
+  "repository": "huming0018-dot/china-travel-food",
+  "commit": "82cafb76d6b8c1f9709e1ecf53daf86ac4d50d67",
+  "purpose": "One-time baseline import. Future edits belong to this canonical repository.",
+  "files": [
+    {
+      "source": "crowd_extension/crowd-extension-mac.command",
+      "destination": "crowd-extension-mac.command",
+      "sha256": "2381a5fa689384a83b8f1a72fe864039a75cff667b8dedfd6c766c837f8a5b58"
+    },
+    {
+      "source": "cloud/crowd_extension_trial.py",
+      "destination": "build_trial.py",
+      "sha256": "b18cc8f740b6ec085410fceec4734a13f24e8c2bcfdc70c80f99b36322fed774"
+    }
+  ]
+}

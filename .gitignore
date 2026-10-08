@@ -1,0 +1,5 @@
+
+__pycache__/
+*.pyc
+v4/dist/
+v4/*trial*.json
