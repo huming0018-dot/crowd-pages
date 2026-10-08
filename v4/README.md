@@ -16,11 +16,11 @@ python3 v4/build_trial.py --source /private/crowd-extension.zip \
 
 ## 已有参与者更新
 
-`build_update.py`从不含邀请的canonical源包构建`v4/releases/crowd-v4.1.1-update-mac.zip`。该包只更新原Mac、Chrome/Edge个人资料中已安装的v4；未找到原安装或找到多个身份时停止，不创建新身份。原浏览器存储不删除，用户不需要Codex或开发环境。
+`build_update.py`从不含邀请的canonical源包构建`v4/releases/crowd-v4.1.2-update-mac.zip`。该包只更新原Mac、Chrome/Edge个人资料中已安装的v4；未找到原安装或找到多个身份时停止，不创建新身份。原浏览器存储不删除，用户不需要Codex或开发环境。
 
 ```sh
 python3 v4/test_update.py /private/crowd-extension.zip
-python3 v4/build_update.py --source /private/crowd-extension.zip --output v4/releases/crowd-v4.1.1-update-mac.zip
+python3 v4/build_update.py --source /private/crowd-extension.zip --output v4/releases/crowd-v4.1.2-update-mac.zip
 ```
 
 无邀请更新包可以提供给已有参与者，不能用它开放新报名。下载后运行更新助手，在自动打开的原扩展管理页确认刷新，再回到原插件继续；不能承诺解压扩展后台静默升级。管理员通过既有自愿诊断确认版本，再核对真实proof与证据字段，不要求参与者复制正文或接入Codex。
