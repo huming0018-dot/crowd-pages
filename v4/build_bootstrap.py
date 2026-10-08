@@ -15,7 +15,7 @@ def build(source,helper,output):
     version=json.loads(files[prefix+'插件/manifest.json'])['version']
     if version.split('.')[:2]!=['4','2']:raise ValueError('Updater bootstrap requires v4.2')
     files[prefix+'updater/crowd-v4-updater']=pathlib.Path(helper).read_bytes()
-    files[prefix+'先打开安装说明.html']=f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>接通自动更新 {version}</title><h1>一次接通，以后自动更新</h1><p>适用于 macOS 14 或以上，支持 Intel 和 Apple 芯片；请保留浏览器开发者模式。</p><p>在最初参加的 Mac、浏览器和个人资料运行“更新.command”，然后在打开的扩展管理页刷新原插件一次。不要卸载或重新报名。</p><p>本次会更新原插件并安装专用本机更新助手和失败恢复任务。以后浏览器运行时每小时检查签名版本，只替换本插件并重载，不关闭浏览器。保留参与身份、停止状态和未回传证据。插件内可关闭自动更新。</p><p>新增权限仅为与本机更新助手通信；不会修改浏览器管理策略或收集其他标签页。更新助手不执行远程任意脚本。首次接通仍需本次刷新，之后无需反复解压。</p><p>诊断开启时保留最近24个固定动作节点帮助定位故障，不发送Cookie、完整网址或正文。自动更新机制已做隔离实机验证，原设备真实采集仍须核验。</p></html>'''.encode()
+    files[prefix+'先打开安装说明.html']=f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>接通自动更新 {version}</title><h1>一次接通，以后自动更新</h1><p>适用于 macOS 14 或以上，支持 Intel 和 Apple 芯片；请保留浏览器开发者模式。</p><p>在最初参加的 Mac、浏览器和个人资料运行“更新.command”，然后在打开的扩展管理页刷新原插件一次。不要卸载或重新报名。</p><p>本次会更新原插件并安装系统定时 OTA 和失败恢复任务。系统每小时独立检查签名版本：浏览器运行时下载验证缓存，由插件保存状态后加载；浏览器关闭时可更新文件，等待下次启动确认。只更新本插件，不关闭浏览器。保留参与身份、停止状态和未回传证据。插件内可关闭自动更新。</p><p>保留现有本机通信权限；不会修改浏览器管理策略或收集其他标签页。更新助手不执行远程任意脚本。首次接通仍需本次刷新，之后无需反复解压。</p><p>诊断开启时保留最近24个固定动作节点帮助定位故障，不发送Cookie、完整网址或正文。自动更新机制已做隔离实机验证，原设备真实采集仍须核验。</p></html>'''.encode()
     files.pop(prefix+'SHA256SUMS.txt')
     files[prefix+'SHA256SUMS.txt']=''.join(hashlib.sha256(b).hexdigest()+'  '+n.removeprefix(prefix)+'\n' for n,b in sorted(files.items())).encode()
     output=pathlib.Path(output);output.parent.mkdir(parents=True,exist_ok=True)
