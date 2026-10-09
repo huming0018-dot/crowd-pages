@@ -4,7 +4,7 @@
 import argparse,hashlib,importlib.util,json,pathlib,subprocess,tempfile,zipfile
 root=pathlib.Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('updates',root/'build_update.py');updates=importlib.util.module_from_spec(spec);spec.loader.exec_module(updates)
-def build(source,helper,output,postprocess=None,vision=None,speech=None):
+def build(source,helper,output,postprocess=None,vision=None,speech=None,multiplatform=None):
     architectures=subprocess.check_output(['lipo','-archs',str(helper)],text=True).split()
     if set(architectures)!={'x86_64','arm64'}:raise ValueError('Universal macOS helper required')
     subprocess.run(['codesign','--verify','--strict',str(helper)],check=True,capture_output=True)
@@ -15,6 +15,9 @@ def build(source,helper,output,postprocess=None,vision=None,speech=None):
     version=json.loads(files[prefix+'插件/manifest.json'])['version']
     if version.split('.')[:2]!=['4','2']:raise ValueError('Updater bootstrap requires v4.2')
     files[prefix+'updater/crowd-v4-updater']=pathlib.Path(helper).read_bytes()
+    if multiplatform is not None:
+        for name in ('mc_runner.py','dashboard.py','dashboard.html','打开工作台.command','README.md'):
+            files[prefix+'多平台采集/'+name]=(pathlib.Path(multiplatform)/name).read_bytes()
     if postprocess is not None:
         if vision is None or speech is None:raise ValueError('Compiled Vision and Speech tools required')
         for name in ('evidence.py','media.py','pipeline.py','local_asr.py','fetch_model.py','requirements-asr.txt','vision.swift','speech.swift','SpeechInfo.plist','README.md'):
@@ -35,4 +38,4 @@ def build(source,helper,output,postprocess=None,vision=None,speech=None):
     digest=hashlib.sha256(output.read_bytes()).hexdigest();output.with_suffix('.zip.sha256').write_text(digest+'  '+output.name+'\n')
     return {'version':version,'bytes':output.stat().st_size,'sha256':digest,'mode':'one_time_updater_bootstrap'}
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--source',type=pathlib.Path,required=True);p.add_argument('--helper',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);p.add_argument('--postprocess',type=pathlib.Path);p.add_argument('--vision',type=pathlib.Path);p.add_argument('--speech',type=pathlib.Path);a=p.parse_args();print(json.dumps(build(a.source,a.helper,a.output,a.postprocess,a.vision,a.speech)))
+    p=argparse.ArgumentParser();p.add_argument('--source',type=pathlib.Path,required=True);p.add_argument('--helper',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);p.add_argument('--postprocess',type=pathlib.Path);p.add_argument('--vision',type=pathlib.Path);p.add_argument('--speech',type=pathlib.Path);p.add_argument('--multiplatform',type=pathlib.Path);a=p.parse_args();print(json.dumps(build(a.source,a.helper,a.output,a.postprocess,a.vision,a.speech,a.multiplatform)))
