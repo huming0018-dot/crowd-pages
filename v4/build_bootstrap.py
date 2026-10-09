@@ -17,7 +17,7 @@ def build(source,helper,output,postprocess=None,vision=None,speech=None):
     files[prefix+'updater/crowd-v4-updater']=pathlib.Path(helper).read_bytes()
     if postprocess is not None:
         if vision is None or speech is None:raise ValueError('Compiled Vision and Speech tools required')
-        for name in ('evidence.py','media.py','vision.swift','speech.swift','SpeechInfo.plist','README.md'):
+        for name in ('evidence.py','media.py','pipeline.py','local_asr.py','fetch_model.py','requirements-asr.txt','vision.swift','speech.swift','SpeechInfo.plist','README.md'):
             files[prefix+'授权文件后处理/'+name]=(pathlib.Path(postprocess)/name).read_bytes()
         if set(subprocess.check_output(['lipo','-archs',str(vision)],text=True).split())!={'x86_64','arm64'}:raise ValueError('Universal Vision tool required')
         subprocess.run(['codesign','--verify','--strict',str(vision)],check=True,capture_output=True)
