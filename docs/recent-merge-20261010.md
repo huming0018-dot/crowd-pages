@@ -1,6 +1,6 @@
 # 动态展示合并修复 · 2026-10-10
 
-状态：代码与隔离回归完成；发布状态以 PR 合并及实际部署核验为准。
+状态：两个仓库已合并 main；公开页已实际发布，后台服务器部署受连接阻塞尚未完成。
 更新人：Codex；时间：2026-10-10（Asia/Shanghai）。
 
 ## 问题与范围
@@ -50,3 +50,11 @@ node crowd-pages/tests/recent_merge.test.cjs crowd-pages/status.html kimi-worksp
 内部后台：合并 kimi-workspace/main 后，将 admin.py 同步至 /home/ubuntu/food-cloud-v2/admin.py，
 先备份、编译，再重启 food-admin；核验实际 HTML 包含新函数。
 禁止把 main 合并写成后台已发布；未取得服务器发布通道时明确记录阻塞。
+
+## 本次发布核验
+- crowd-pages PR #2 已合并：a7b80449a5efbcda704a2208ec3f617a61a42742。
+- kimi-workspace PR #1 已合并：517adcb63a06dbd08c71421b97246d2c0b910dc1。
+- 两处 main 源码与本地通过回归的内容逐字一致；两仓库 GitHub Actions samples 均 success。
+- 已从 https://huming0018-dot.github.io/crowd-pages/status.html 抓取实际线上 HTML，并与后台 main 规则同时重跑：80 checks PASS。公开页新规则已可访问。
+- 后台 / 返回令牌门页，不能凭匿名响应核验监控 HTML。DevSpace 的 ~/Documents/kimi 和 /Users/hubowen/Documents/kimi 两次均 Internal error，当前执行环境未持有 ~/.ssh/food_cloud_deploy；没有可用服务器发布通道。本次未更新服务器文件、未重启服务，禁止将后台 main 合并误报为上线。
+- 剩余：恢复已有可 SSH 终端后，仅备份/同步 /home/ubuntu/food-cloud-v2/admin.py，编译并重启 food-admin，核验真实响应。无需再次授权合并/发布。
