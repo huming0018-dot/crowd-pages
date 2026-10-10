@@ -1,0 +1,14 @@
+给之前已经参与的 Mac 用户：更新到 4.1.2，不需要 Codex，不用重新报名，不要卸载原插件。
+
+1. 先在原插件里点“停止”。
+2. 打开 Mac 的“终端”，复制下面这一整行，粘贴后按回车。
+3. 命令会打开原浏览器的扩展管理页。点本插件的刷新图标，再打开插件，确认 4.1.2，点“继续采集”。若小红书要求登录或验证，请本人处理后继续。
+
+crowd_update_dir="$(mktemp -d)" && curl --fail --location --proto '=https' --tlsv1.2 'https://raw.githubusercontent.com/huming0018-dot/crowd-pages/aa244491e274f57ba195db19bcd9a5715f4aeb34/v4/releases/crowd-v4.1.2-update-mac.zip' -o "$crowd_update_dir/update.zip" && printf '%s  %s\n' '55a63bdb0d0b9107602da331ba4befe2aab412d67a5f52e7f7fc40847a1db206' "$crowd_update_dir/update.zip" | shasum -a 256 -c - && ditto -x -k "$crowd_update_dir/update.zip" "$crowd_update_dir" && /bin/bash "$crowd_update_dir/Mac众包更新/更新.command"
+
+这条命令只下载固定版本、核对 SHA256，再运行更新助手；不会要求管理员密码，不修改浏览器管理策略，不删除原插件身份和进度。
+如果没有找到原 v4 安装或发现多个浏览器身份，助手会停止，不替你新建参与身份。
+运行诊断若原来已开启会继续工作，由中台检查新版版本和回传，无需你导出网页正文或日志。
+本次仍属于已有参与者的小范围修复验证；发包不等于已确认真实采集成功。
+
+本版修复：加载早期即接入采集脚本；搜索页面打开后后台进程重启不重复发起搜索；重试保留上一轮导航摘要。两项故障复现均为旧版失败、新版通过。不会修改原身份、访问预算和暂停状态；需要本人点击继续。真实平台采集是否恢复，由中台核对。
