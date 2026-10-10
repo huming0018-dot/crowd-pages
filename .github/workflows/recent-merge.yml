@@ -1,0 +1,15 @@
+name: Recent activity merge regression
+on:
+  push:
+    paths: [status.html, workspace/food-cloud-v2/admin.py, tests/recent_merge.test.cjs, .github/workflows/recent-merge.yml]
+  pull_request:
+    paths: [status.html, workspace/food-cloud-v2/admin.py, tests/recent_merge.test.cjs, .github/workflows/recent-merge.yml]
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node tests/recent_merge.test.cjs

@@ -97,6 +97,33 @@ function rateWord(pct){
   return " · 偏高，需关注";
 }
 
+// BEGIN crowd recent merge v1 — keep byte-identical in both views.
+function crowdRecent(recent) {
+  // RPC selects the last 10 proofs by id DESC; normalize display by event time.
+  return (recent || []).slice().sort((a, b) => {
+    const ta = Date.parse(a.created_at), tb = Date.parse(b.created_at);
+    return (Number.isFinite(tb) ? tb : -Infinity) -
+           (Number.isFinite(ta) ? ta : -Infinity) || 0;
+  });
+}
+function mergeCrowdRecent(recent) {
+  const merged = [];
+  crowdRecent(recent).forEach(x => {
+    const prev = merged[merged.length - 1];
+    const pid = x.participant_id || "";
+    const store = x.matched_store || "";
+    const delta = prev ? Date.parse(prev.at) - Date.parse(x.created_at) : NaN;
+    // Fixed newest-record anchor: no rolling/chained window; exact 10m is separate.
+    const same = prev && pid && store && x.gate_status &&
+      prev.pid === pid && prev.store === store && prev.status === x.gate_status &&
+      Number.isFinite(delta) && delta >= 0 && delta < 600000;
+    if (same) prev.n++;
+    else merged.push({store, pid, status: x.gate_status, at: x.created_at, n: 1});
+  });
+  return merged;
+}
+// END crowd recent merge v1
+
 async function load() {
   try {
     const r = await fetch(API_BASE + "/rest/v1/rpc/crowd_status_summary", {
@@ -108,8 +135,8 @@ async function load() {
     if (!d.ok) throw new Error("bad");
 
     /* 顶部心跳 */
-    const last = d.recent && d.recent.length ? new Date(d.recent[0].created_at) : null;
-    const ago = last ? humanTime(d.recent[0].created_at) : null;
+    const recent = crowdRecent(d.recent);
+    const ago = recent.length ? humanTime(recent[0].created_at) : null;
     $("genAt").textContent = "更新于 " + new Date(d.generated_at).toLocaleTimeString() +
       (ago ? " · 最近一条提交在 " + ago : "");
 
@@ -133,17 +160,8 @@ async function load() {
       " · 🟡 开放 " + d.tasks.open + " · ⚪ 关闭 " + d.tasks.closed;
     $("taskBar").style.width = tpct + "%";
 
-    /* 最新动态：同店同人同时段合并成一条「×N」 */
-    const merged = [];
-    (d.recent || []).forEach(x => {
-      const prev = merged[merged.length - 1];
-      const sameMin = prev && prev.store === (x.matched_store || "—") &&
-        prev.pid === (x.participant_id || '').slice(0, 9) && prev.status === x.gate_status &&
-        (new Date(x.created_at) - new Date(prev.at)) < 10 * 60 * 1000;
-      if (sameMin) { prev.n++; prev.at = x.created_at; }
-      else merged.push({store: x.matched_store || "—", pid: (x.participant_id || "").slice(0, 9),
-                        status: x.gate_status, at: x.created_at, n: 1});
-    });
+    /* 最新动态：完整参与者 ID + 同店同状态 + 固定最新记录的 10 分钟窗口 */
+    const merged = mergeCrowdRecent(recent);
     let html = "", lastGroup = "";
     merged.forEach(m => {
       const g = groupOf(m.at);
@@ -152,9 +170,9 @@ async function load() {
         : m.status === "rejected" ? '<span class="tag r">拒收</span>'
         : '<span class="tag d">重复</span>';
       html += '<div class="ev"><span class="t">' + humanTime(m.at) + '</span>' +
-        '<span class="what"><b>' + m.store + '</b>' +
+        '<span class="what"><b>' + (m.store || '—') + '</b>' +
         (m.n > 1 ? ' <span class="n">×' + m.n + '</span>' : '') +
-        '<br><span class="n">' + m.pid + '</span></span>' + tag + '</div>';
+        '<br><span class="n">' + m.pid.slice(0, 9) + '</span></span>' + tag + '</div>';
     });
     $("feed").innerHTML = html || '<div class="muted">还没有提交</div>';
   } catch (e) {
