@@ -8,6 +8,6 @@
 
 Mac 人工下载包位于本目录；OTA 为兼容已审 helper 固定 URL 校验，使用上级目录同字节 `crowd-v4.2.58-participant-extension.zip`。恢复同字节别名为上级 `crowd-v4.2.59-participant-recovery-extension.zip`。签名 envelope 指向提交 SHA 固定的不可变 URL。
 
-56修复自动任务满额换任务、日配额等待、两条验收后等待实验启动并自动继续。57是保留这些修复的独立恢复包，不在活动通道。已有54会从原参与者OTA通道收到56，无需重新安装。已有标准helper安装会自动读取原helper配置并在原目录重新接通，不改Profile、身份、登录与待回传记录；旧KOL权限安装明确拒绝硬迁移。
+当前58包含56的自动任务满额换任务、日配额等待、两条验收后等待实验启动并自动继续修复。59是当前独立恢复包，不在活动通道。已接专属参与者通道的54/56在自动更新开启且原插件空闲时通过OTA收到58，无需重新安装。已有标准helper安装会自动读取原helper配置并在原目录重新接通，不改Profile、身份、登录与待回传记录；旧KOL权限安装明确拒绝硬迁移。
 
 已有标准更新助手也可单独下载 `crowd-v4.2.58-existing-helper-reconnect.zip`，解压双击 reconnect.command。原helper/config/state和注册文件先备份，保留全部原偏好，busy/pending时拒绝；不强制重载，等原插件正常空闲OTA。58修复任务换取期间的监控误报警，59保留全部56/58状态修复，只回滚回传节奏。新Mac完整包已同时支持首次安装和原标准安装接续。
