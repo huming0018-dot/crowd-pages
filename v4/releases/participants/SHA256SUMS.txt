@@ -8,3 +8,6 @@ a1838bf052fd569f3b04f2c9a09a59134fbefbc28779760d22e536d9e80d4f5a  crowd-v4.2.58-
 74b19c3b3ce00a3a3d96714c1c02fceaf90e9363c3c1ef3601ff806b6dcbd410  crowd-v4.2.59-recovery-extension.zip
 ddaf92d3adb2e758950db8217e0d67d798ecb79b1c96eeadca270ce1a11de188  crowd-v4.2.58-mac.zip
 1cd8602c3b39d1d072ef363e273c6e7503b758c311b3997d00f0999d18ad5fe7  crowd-v4.2.58-existing-helper-reconnect.zip
+87a740fac60b8b5ea27bf463ddb557280e86d59fafd15ee2179f41587fc8123c  crowd-v4.2.60-extension.zip
+e1e83a751a7ed0a08dc724242434022187927613e495d821fd4d7fcf3cb7cfc6  crowd-v4.2.60-mac.zip
+f44a64979f93ac4d1928de5119c3bde42993ed71b695d3bd33a9a8eff93865cf  crowd-v4.2.60-existing-helper-reconnect.zip
