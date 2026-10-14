@@ -67,15 +67,19 @@ def build(extension, helper, output):
         subprocess.run([str(helper), '--check-install', str(directory)], check=True, capture_output=True)
     archive_name = f'crowd-v{version}-participant-extension.zip'
     helper_name = 'crowd-v4-participant-updater'
+    extension_key = json.loads(files['manifest.json']).get('key', '')
+    if not re.fullmatch(r'[A-Za-z0-9+/=]+', extension_key):
+        raise ValueError('participant manifest key required')
     base = {
         helper_name: helper.read_bytes(),
         'reconnect.command': (ROOT / 'participant/reconnect.command').read_bytes(),
         'MIGRATION-README.md': (ROOT / 'participant/MIGRATION-README.md').read_bytes(),
+        'browser-preflight.js': (ROOT / 'participant/browser-preflight.js').read_text().replace('@EXTENSION_KEY@', extension_key).encode(),
     }
-    base['MIGRATE-SHA256.txt'] = (digest(base[helper_name]) + '  ' + helper_name + '\n').encode()
+    base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js')).encode()
     install = {**base, archive_name: extension.read_bytes()}
     install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).encode()
-    install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name)).encode()
+    install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js')).encode()
     guide = (ROOT / 'participant/安装说明.html').read_text().replace('@VERSION@', version)
     errors = {
         'os': ('这台 Mac 的系统版本还不够', '本包需要 macOS 14 或更新系统。此次未安装，请先更新系统或联系邀请人。'),
@@ -84,6 +88,9 @@ def build(extension, helper, output):
         'existing': ('找到了原安装，需要先接续', '原目录和更新助手记录不完整。为保护原身份，本次没有覆盖。请把终端最后的提示交给邀请人核对。'),
         'incompatible': ('原版本需要使用对应的更新方式', '原扩展的权限或文件与标准参与者版不兼容（例如旧 KOL 版）。已经保留原样，请联系邀请人；不要卸载或清数据。'),
         'busy': ('这次还没有完成安装或接续', '可能仍在采集、更新或等待系统确认。请保留终端最后的错误文字，等原任务空闲后重试；仍失败则联系邀请人。'),
+        'browser-legacy': ('Chrome 中已有旧版众包插件，先保留它', '旧版仍可能有任务或待回传记录。本次没有覆盖，也没有迁移旧身份。请把此提示交给邀请人安全接续；不要卸载旧插件、删除数据或另行报名。'),
+        'browser-existing': ('Chrome 原插件需要接续原目录', '浏览器登记的插件目录与更新助手不一致。已保留原样，请联系邀请人核对；不要重新加载另一个目录。'),
+        'browser-unknown': ('需要先确认 Chrome 原来的安装', '无法安全读取原安装信息。本次没有安装或接续，请把此提示交给邀请人；不要清空浏览器、卸载插件或重复报名。'),
     }
     def render(mode, error=None):
         title, message = errors.get(error, ('先看安装窗口最后一条提示', '原资料保留。请把最后的错误文字交给邀请人，按原因处理。'))
@@ -101,9 +108,9 @@ def build(extension, helper, output):
     reconnect['install.command'] = ("#!/bin/zsh\nset -eu\nPACKAGE_DIR=\"${0:A:h}\"\ncd \"$PACKAGE_DIR\"\n"
         "if ./reconnect.command; then /usr/bin/open \"$PACKAGE_DIR/existing.html\" || true; "
         "else /usr/bin/open \"$PACKAGE_DIR/help.html\" || true; exit 1; fi\n").encode()
-    source_files = ['build_participant.py', 'participant/install.command', 'participant/reconnect.command',
+    source_files = ['build_participant.py', 'participant/install.command', 'participant/browser-preflight.js', 'participant/reconnect.command',
                     'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
-    provenance = {'package_revision': 2, 'version': version, 'extension_sha256': digest(extension.read_bytes()),
+    provenance = {'package_revision': 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()),
                   'helper_sha256': digest(helper.read_bytes()),
                   'source_sha256': {name: digest((ROOT / name).read_bytes()) for name in source_files}}
     install['package-source.json'] = (json.dumps(provenance, ensure_ascii=False, indent=2) + '\n').encode()
