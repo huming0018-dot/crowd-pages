@@ -1,36 +1,97 @@
 #!/bin/zsh
 set -eu
+umask 077
 PACKAGE_DIR="${0:A:h}"
 INSTALL_DIR="$HOME/Library/Application Support/CrowdParticipantExtension"
 cd "$PACKAGE_DIR"
-/usr/bin/shasum -a 256 -c INSTALL-SHA256.txt
-if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
-  ./reconnect.command
-  exit 0
-fi
-if [[ -e "$INSTALL_DIR" ]]; then
-  print '已存在参与者安装。请使用已接通的 OTA 或联系 Owner；本安装器不会覆盖旧目录。'
-  exit 1
-fi
 INSTALL_NONCE="$$-$RANDOM-$RANDOM"
 INSTALL_CREATED=false
 INSTALL_SUCCESS=false
+FAILURE_PAGE="$PACKAGE_DIR/help.html"
 cleanup() {
+  local install_exit=$?
   if [[ "$INSTALL_CREATED" == true && "$INSTALL_SUCCESS" != true && ! -L "$INSTALL_DIR" && -d "$INSTALL_DIR" ]]; then
     if [[ "$(/usr/bin/stat -f '%d:%i' "$INSTALL_DIR")" == "$INSTALL_INODE" && -f "$INSTALL_DIR/.crowd-install-owner" && "$(/bin/cat "$INSTALL_DIR/.crowd-install-owner")" == "$INSTALL_NONCE" ]]; then
       /bin/rm -rf -- "$INSTALL_DIR"
     fi
   fi
+  if (( install_exit != 0 )); then
+    print '\n安装暂未完成。不要卸载、清空数据或重复报名。请把窗口最后的错误文字交给邀请人。'
+    /usr/bin/open "$FAILURE_PAGE" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
+fail() {
+  FAILURE_PAGE="$PACKAGE_DIR/help-$1.html"
+  print -r -- "$2"
+  exit 1
+}
+print '\n众包采集安装助手：无需输入命令，请等待自动检查。'
+print '[1/3] 检查安装包…'
+if ! /usr/bin/shasum -a 256 -c INSTALL-SHA256.txt; then
+  fail integrity '安装包缺失或校验不一致：请保留原安装，重新下载并完整解压本包。'
+fi
+MAC_VERSION="$(/usr/bin/sw_vers -productVersion)"
+MAC_MAJOR="${MAC_VERSION%%.*}"
+if [[ "$MAC_MAJOR" != <-> ]] || (( MAC_MAJOR < 14 )); then
+  fail os '本安装包需要 macOS 14 或更新系统。当前设备尚未安装，请先更新系统或联系邀请人。'
+fi
+CHROME_APP=''
+for candidate in '/Applications/Google Chrome.app' "$HOME/Applications/Google Chrome.app"; do
+  if [[ -d "$candidate" ]]; then CHROME_APP="$candidate"; break; fi
+ done
+if [[ -z "$CHROME_APP" ]]; then
+  while IFS= read -r candidate; do
+    if [[ -d "$candidate" ]]; then CHROME_APP="$candidate"; break; fi
+  done < <(/usr/bin/mdfind 'kMDItemCFBundleIdentifier == "com.google.Chrome"' 2>/dev/null)
+fi
+if [[ -z "$CHROME_APP" ]]; then
+  fail chrome '没有找到 Google Chrome。请先安装 Chrome，再双击“开始安装.command”。'
+fi
+CHROME_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$CHROME_APP/Contents/Info.plist" 2>/dev/null || true)"
+CHROME_MAJOR="${CHROME_VERSION%%.*}"
+if [[ "$CHROME_MAJOR" != <-> ]] || (( CHROME_MAJOR < 120 )); then
+  fail chrome '需要 Chrome 120 或更新版本。请在 Chrome 菜单中的“关于 Google Chrome”完成更新后重试。'
+fi
+if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
+  print '[2/3] 找到原标准安装，正在接续；不会重新注册或覆盖采集身份。'
+  ORIGINAL_DIR="$(/usr/bin/plutil -extract directory raw -o - "$HOME/Library/Application Support/CrowdV4Updater/config.json" 2>/dev/null || true)"
+  if [[ -z "$ORIGINAL_DIR" || ! -d "$ORIGINAL_DIR" ]]; then
+    fail existing '原更新助手记录的安装目录不存在。已保留原资料，请联系邀请人核对；不要删除目录或重新报名。'
+  fi
+  if ! ./crowd-v4-participant-updater --check-install "$ORIGINAL_DIR"; then
+    fail incompatible '原扩展与本参与者更新不兼容（例如旧 KOL 安装）。已保留原样，请联系邀请人使用对应版本。'
+  fi
+  if ! ./reconnect.command; then
+    fail busy '原安装暂时无法接续，可能正在采集或更新。没有强制切换，请等原插件空闲后重试；仍失败请联系邀请人。'
+  fi
+  INSTALL_SUCCESS=true
+  print '[3/3] 原安装已接续。请看刚打开的说明页；等待原插件空闲完成更新。'
+  /usr/bin/open -a 'Google Chrome' "$PACKAGE_DIR/existing.html" || /usr/bin/open "$PACKAGE_DIR/existing.html" || true
+  exit 0
+fi
+if [[ -e "$INSTALL_DIR" ]]; then
+  fail existing '发现原参与者目录，但未找到标准更新助手。为保留原身份，本次未覆盖，请联系邀请人接续。'
+fi
+if [[ -f "$HOME/Library/Application Support/CrowdV4LocalTestUpdater/config.json" ]]; then
+  print '检测到私人测试版：保留原样。以下另装标准参与者版，不迁移私人版的身份或队列。'
+fi
+print '[2/3] 准备标准参与者安装，保留现有浏览器资料…'
+/bin/mkdir -p "$HOME/Library/Application Support"
 /bin/mkdir -m 700 "$INSTALL_DIR"
 INSTALL_INODE="$(/usr/bin/stat -f '%d:%i' "$INSTALL_DIR")"
 print -r -- "$INSTALL_NONCE" > "$INSTALL_DIR/.crowd-install-owner"
 INSTALL_CREATED=true
 /usr/bin/unzip -q @EXTENSION_ARCHIVE@ -d "$INSTALL_DIR"
-./crowd-v4-participant-updater --install "$INSTALL_DIR" 'Google Chrome'
+if ! ./crowd-v4-participant-updater --install "$INSTALL_DIR" 'Google Chrome'; then
+  fail busy '系统未能完成助手安装。请保留终端错误并联系邀请人；不要删除原扩展或关闭系统保护。'
+fi
 /bin/rm -- "$INSTALL_DIR/.crowd-install-owner"
 INSTALL_SUCCESS=true
-print '请在 Chrome 扩展页开启开发者模式，点击加载已解压扩展，选择刚打开的安装目录。之后从 Owner 邀请链接加入并确认采集；任务自动领取。'
-/usr/bin/open "$INSTALL_DIR"
-/usr/bin/open -a 'Google Chrome' 'chrome://extensions/'
+print '[3/3] 安装文件已准备完成。Chrome 的加载确认需要你本人完成。'
+print -r -- "$INSTALL_DIR" | /usr/bin/pbcopy || true
+print '安装目录已尝试复制到剪贴板，也可以在刚打开的 Finder 中手动选择。'
+/usr/bin/open "$INSTALL_DIR" || true
+/usr/bin/open -a 'Google Chrome' 'chrome://extensions/' || true
+/usr/bin/open -a 'Google Chrome' "$PACKAGE_DIR/new.html" || /usr/bin/open "$PACKAGE_DIR/new.html" || true
+print '请看图解完成 Chrome 加载，再打开邀请人给你的原邀请链接。安装成功不等于采集已开始。'

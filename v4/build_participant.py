@@ -43,7 +43,7 @@ def pack(path, files):
         for name, data in sorted(files.items()):
             info = zipfile.ZipInfo(name, (2026, 10, 14, 0, 0, 0))
             info.create_system = 3
-            info.external_attr = (0o100755 if name.endswith('.command') or name == 'crowd-v4-participant-updater' else 0o100644) << 16
+            info.external_attr = (0o100755 if name.endswith('.command') or PurePosixPath(name).name == 'crowd-v4-participant-updater' else 0o100644) << 16
             info.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(info, data)
     checksum = digest(path.read_bytes())
@@ -76,9 +76,41 @@ def build(extension, helper, output):
     install = {**base, archive_name: extension.read_bytes()}
     install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).encode()
     install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name)).encode()
-    result = {'version': version, 'extension_sha256': digest(extension.read_bytes()), 'helper_sha256': digest(helper.read_bytes()),
-              'mac': pack(output, install),
-              'reconnect': pack(output.with_name(f'crowd-v{version}-existing-helper-reconnect.zip'), base)}
+    guide = (ROOT / 'participant/安装说明.html').read_text().replace('@VERSION@', version)
+    errors = {
+        'os': ('这台 Mac 的系统版本还不够', '本包需要 macOS 14 或更新系统。此次未安装，请先更新系统或联系邀请人。'),
+        'chrome': ('请先安装或更新 Google Chrome', '没有安装 Chrome：先从 <a href="https://www.google.com/chrome/" rel="noreferrer" target="_blank">Google 官网下载安装</a>。已经安装：打开 Chrome 菜单中的“关于 Google Chrome”完成更新，需达到120或更新版本。完成后重新双击“开始安装.command”。'),
+        'integrity': ('安装包没有完整解压，或校验未通过', '重新从邀请人提供的地址下载，完整解压整个包。不要移动其中单个文件；原安装未覆盖。'),
+        'existing': ('找到了原安装，需要先接续', '原目录和更新助手记录不完整。为保护原身份，本次没有覆盖。请把终端最后的提示交给邀请人核对。'),
+        'incompatible': ('原版本需要使用对应的更新方式', '原扩展的权限或文件与标准参与者版不兼容（例如旧 KOL 版）。已经保留原样，请联系邀请人；不要卸载或清数据。'),
+        'busy': ('这次还没有完成安装或接续', '可能仍在采集、更新或等待系统确认。请保留终端最后的错误文字，等原任务空闲后重试；仍失败则联系邀请人。'),
+    }
+    def render(mode, error=None):
+        title, message = errors.get(error, ('先看安装窗口最后一条提示', '原资料保留。请把最后的错误文字交给邀请人，按原因处理。'))
+        return guide.replace('@MODE@', mode).replace('@ERROR_MESSAGE@', title).replace('@ERROR_NEXT@', message).encode()
+    entry = (ROOT / 'participant/start.command').read_bytes()
+    # Keep one visible executable entry; signed extension/helper bytes stay intact.
+    visible = {'开始安装.command': entry, '安装说明.html': render('intro'),
+               '安装说明.md': (ROOT / 'participant/安装说明.md').read_text().replace('@VERSION@', version).encode()}
+    support = {name + '.html': render(mode) for name, mode in
+               [('new', 'new'), ('existing', 'existing'), ('help', 'help')]}
+    support.update({'help-' + code + '.html': render('help', code) for code in errors})
+    install.update(support)
+    # The small legacy reconnect ZIP also gets one entrance, but never installs a new identity.
+    reconnect = {**base, **support}
+    reconnect['install.command'] = ("#!/bin/zsh\nset -eu\nPACKAGE_DIR=\"${0:A:h}\"\ncd \"$PACKAGE_DIR\"\n"
+        "if ./reconnect.command; then /usr/bin/open \"$PACKAGE_DIR/existing.html\" || true; "
+        "else /usr/bin/open \"$PACKAGE_DIR/help.html\" || true; exit 1; fi\n").encode()
+    source_files = ['build_participant.py', 'participant/install.command', 'participant/reconnect.command',
+                    'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
+    provenance = {'package_revision': 2, 'version': version, 'extension_sha256': digest(extension.read_bytes()),
+                  'helper_sha256': digest(helper.read_bytes()),
+                  'source_sha256': {name: digest((ROOT / name).read_bytes()) for name in source_files}}
+    install['package-source.json'] = (json.dumps(provenance, ensure_ascii=False, indent=2) + '\n').encode()
+    reconnect['package-source.json'] = install['package-source.json']
+    wrap = lambda contents: {**visible, **{'.crowd-support/' + name: data for name, data in contents.items()}}
+    result = {**provenance, 'mac': pack(output, wrap(install)),
+              'reconnect': pack(output.parent / '.internal' / f'crowd-v{version}-existing-helper-reconnect.zip', wrap(reconnect))}
     output.with_suffix('.build.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
 
