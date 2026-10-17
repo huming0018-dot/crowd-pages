@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "profile": "local-test",
+  "extension_id": "ipccepibnkcfpikgebdaanimocdappfk",
+  "host": "com.crowd.v4.local_test_updater",
+  "public_key_base64": "ISM7tPiQIcXLWyR++FGkGN8AV8EyQRodor7MlMEWxnU=",
+  "key_sha256": "bf1e44ba49987dece72a023627b90cdba03284efa2a74028def3ab774ce6dc3d"
+}

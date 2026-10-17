@@ -1,0 +1,163 @@
+diff --git a/v4/manifest.json b/v4/manifest.json
+index 782572f..1531510 100644
+--- a/v4/manifest.json
++++ b/v4/manifest.json
+@@ -2,7 +2,7 @@
+   "manifest_version": 3,
+   "minimum_chrome_version": "120",
+   "name": "众包公开笔记采集",
+-  "version": "4.2.6",
++  "version": "4.2.8",
+   "description": "自愿参与、自动任务与公开网页采集，验证与奖励分账，遇到验证或限流立即暂停。",
+   "permissions": [
+     "storage",
+diff --git a/v4/src/agent.js b/v4/src/agent.js
+index 34e42ee..7a88c29 100644
+--- a/v4/src/agent.js
++++ b/v4/src/agent.js
+@@ -172,7 +172,8 @@
+           s.next_at = now + 3600000;
+         } else if (s.phase === 'idle') {
+           if (!await this.admit(s, 'search', alive, signal)) return;
+-          s.phase = 'search'; s.page_deadline = now + 120000; s.next_at = now + 30000;
++          // One alarm interval for initial search loading; never auto-reopen it.
++          s.phase = 'search'; s.page_deadline = this.r.now() + 30000; s.next_at = s.page_deadline;
+           // Persist before navigation: a worker restart after tabs.update must
+           // resume probing instead of opening/charging the same search again.
+           await this.save(s); alive();
+@@ -456,13 +457,14 @@
+       } else finish();
+     }
+     checkPage(page, s, now) {
++      now = Math.max(now, this.r.now());
+       if (page.gate) throw new Error(page.gate);
+       if (page.ready) s.last_error = null;
+       if (page.reopen) {
+         if (s.phase === 'search') throw new Error('navigation_failed');
+         s.phase = 'reopen_note'; s.search_round = 0; s.next_at = now + 30000; return;
+       }
+-      if (!page.ready) { if (now > s.page_deadline) throw new Error(['navigation_uncommitted','page_loading','content_unavailable','probe_timeout'].includes(page.reason) ? page.reason : 'page_timeout'); s.next_at = now + 30000; }
++      if (!page.ready) { if (now >= s.page_deadline) throw new Error(['navigation_uncommitted','page_loading','content_unavailable','probe_timeout'].includes(page.reason) ? page.reason : 'page_timeout'); s.next_at = now + 30000; }
+     }
+   }
+   root.CrowdAgent = CrowdAgent;
+diff --git a/v4/src/background.js b/v4/src/background.js
+index 1ea6107..23ec523 100644
+--- a/v4/src/background.js
++++ b/v4/src/background.js
+@@ -12,8 +12,17 @@ async function probeTab(id, action) {
+       chrome.tabs.sendMessage(id, {type: 'crowd_probe', action}),
+       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('probe_timeout')), 2000); })
+     ]);
+-    return {response, status: response ? 'ok' : 'no_receiver'};
+-  } catch (e) { return {response: null, status: e.message === 'probe_timeout' ? 'timed_out' : 'no_receiver'}; }
++    return {response, status: response ? 'ok' : 'no_receiver', error: response ? 'none' : 'empty_response'};
++  } catch (e) {
++    // Only fixed categories leave this helper; browser errors may contain URLs.
++    const message = String(e?.message || '');
++    const error = message === 'probe_timeout' ? 'timed_out' :
++      /Receiving end does not exist/i.test(message) ? 'no_receiver' :
++      /message (?:port|channel) closed/i.test(message) ? 'port_closed' :
++      /No tab with id|Invalid tab ID/i.test(message) ? 'tab_missing' :
++      /Cannot access|Missing host permission/i.test(message) ? 'access_denied' : 'message_failed';
++    return {response: null, status: error === 'timed_out' ? 'timed_out' : 'no_receiver', error};
++  }
+   finally { clearTimeout(timer); }
+ }
+ // Only fixed categories leave this helper. Never retain or report a frame URL.
+@@ -46,7 +55,8 @@ const runtime = {
+     const now = Date.now();
+     const at = Math.max(now + 30000, Math.min(Number.isFinite(when) ? when : now + 30000, now + 60000));
+     const alarm = await chrome.alarms.get('crowd_tick');
+-    if (alarm?.periodInMinutes !== .5 || !Number.isFinite(alarm.scheduledTime) || Math.abs(alarm.scheduledTime - at) > 1000)
++    // Early page events must not postpone an already scheduled deadline.
++    if (alarm?.periodInMinutes !== .5 || !Number.isFinite(alarm.scheduledTime) || alarm.scheduledTime < now || alarm.scheduledTime > at + 1000)
+       await chrome.alarms.create('crowd_tick', {when: at, periodInMinutes: .5});
+   },
+   cancel: () => chrome.alarms.clear('crowd_tick'),
+@@ -200,7 +210,7 @@ async function reportDiagnostics() {
+         let snapshot = null;
+         if (settings.enabled) {
+           const s = await agent.read(), id = await storage.get('work_tab');
+-          let tab = null, page = null, tabStatus = 'missing', probeStatus = 'unknown', navDocument = {document_kind:'unavailable',pending_kind:'none'};
++          let tab = null, page = null, tabStatus = 'missing', probeStatus = 'unknown', probeError = 'unknown', navDocument = {document_kind:'unavailable',pending_kind:'none'};
+           try {
+             if (id) {
+               tab = await chrome.tabs.get(id);
+@@ -210,6 +220,7 @@ async function reportDiagnostics() {
+                 // A disconnected content script is recorded, never fixed by bypassing policy.
+                 const result = await probeTab(id, 'diagnostics');
+                 probeStatus = result.status;
++                probeError = result.error;
+                 page = result.response?.page || null;
+                 if (!page && tabStatus === 'complete') tabStatus = 'no_content';
+               }
+@@ -230,7 +241,7 @@ async function reportDiagnostics() {
+             prev_nav_stage: previous?.stage || 'unknown', prev_nav_error: previous?.error || null, prev_nav_age_s: age(previous?.at),
+             page_failures: number(s.page_failures, 3), last_tick_age_s: age(s.last_tick),
+             next_in_s: Math.min(86400, Math.max(0, Math.ceil(((s.next_at || 0) - Date.now()) / 1000))),
+-            probe_status: probeStatus,
++            probe_status: probeStatus, probe_error: probeError,
+             phase: oneOf(s.phase, ['idle','search','search_done','note','reopen_note','enrich'], 'idle'),
+             error: s.last_error ? oneOf(s.last_error, diagnosticErrors, 'unexpected_error') : null,
+             task_id: Number.isSafeInteger(s.task?.id) ? s.task.id : null,
+diff --git a/v4/src/core.js b/v4/src/core.js
+index aacaf69..5ddcc50 100644
+--- a/v4/src/core.js
++++ b/v4/src/core.js
+@@ -1,7 +1,7 @@
+ /* One contract for desktop and native containers. No page receives credentials. */
+ (function (root) {
+   'use strict';
+-  const VERSION = '4.2.6', CONSENT = 'crowd-public-v4';
++  const VERSION = '4.2.8', CONSENT = 'crowd-public-v4';
+   const HOST = 'https://www.xiaohongshu.com';
+   const publicOrigin = u => u.protocol === 'https:' && ['www.xiaohongshu.com', 'm.xiaohongshu.com'].includes(u.hostname) && !u.username && !u.password && !u.port;
+   function noteURL(value) {
+diff --git a/v4/tests/navigation-state.cjs b/v4/tests/navigation-state.cjs
+index dc0285b..33d5691 100644
+--- a/v4/tests/navigation-state.cjs
++++ b/v4/tests/navigation-state.cjs
+@@ -18,7 +18,15 @@ for(const name of ['core','agent'])vm.runInThisContext(fs.readFileSync((process.
+  now+=30000;await new CrowdAgent(runtime,api).tick();
+  assert.equal(opens,1,'worker restart must not reopen the just-issued search');
+  assert.equal(searches,1,'one search admission survives a worker restart');assert.equal(probes,1);
+- assert.equal(state.phase,'search');assert.ok(state.page_deadline>now);
++ assert.equal(state.phase,'search');assert.equal(state.enabled,false,'exact deadline stops the unavailable search');
++ assert.equal(state.page_deadline,now);assert.equal(state.last_error,'page_loading');
++ // A probe can cross the deadline; use its completion time, but accept ready DOM.
++ for(const ready of [false,true]){
++  const agent=new CrowdAgent(runtime,api),deadline=now+1000;
++  const checking={phase:'search',page_deadline:deadline};now=deadline;
++  if(ready)assert.doesNotThrow(()=>agent.checkPage({ready:true},checking,deadline-500));
++  else assert.throws(()=>agent.checkPage({ready:false,reason:'page_loading'},checking,deadline-500),/page_loading/);
++ }
+  // Both Chrome startup and an alarm gap must finish the already-admitted
+  // attempt, even when its document never became accessible to the extension.
+  for(const recover of [false,true]){
+diff --git a/v4/tests/worker.cjs b/v4/tests/worker.cjs
+index eb67802..0c300bd 100644
+--- a/v4/tests/worker.cjs
++++ b/v4/tests/worker.cjs
+@@ -19,6 +19,7 @@ vm.runInContext(fs.readFileSync(path.join(src,'background.js'),'utf8'),context);
+  const wake=Date.now()+45000;await vm.runInContext('runtime.schedule('+wake+')',context);
+  assert.equal(alarm.when,wake,'45s deadline must not be rounded to an unrelated 60s tick');
+  const same=alarm;await vm.runInContext('runtime.schedule('+wake+')',context);assert.equal(alarm,same,'same deadline does not postpone an existing wakeup');
++ await vm.runInContext('runtime.schedule(Date.now()+60000)',context);assert.equal(alarm,same,'an early event cannot postpone the pending wake');
+  await vm.runInContext('runtime.schedule(Date.now()+1)',context);assert.ok(alarm.when>=Date.now()+29000);
+  await vm.runInContext('runtime.schedule(Date.now()+3600000)',context);assert.ok(alarm.when<=Date.now()+60000,'long waits retain control polling without clearing durable deadlines');
+  await vm.runInContext('runtime.cancel()',context);assert.equal(alarm,null);
+@@ -121,6 +122,13 @@ vm.runInContext(fs.readFileSync(path.join(src,'background.js'),'utf8'),context);
+  assert.equal((await vm.runInContext('runtime.probe("search")',context)).reason,'content_unavailable');
+  await vm.runInContext('reportDiagnostics()',context);
+  assert.equal(JSON.parse(fetches.at(-1).options.body).p_state.probe_status,'no_receiver');
++ assert.equal(JSON.parse(fetches.at(-1).options.body).p_state.probe_error,'no_receiver');
++ for(const [reply,error] of [[null,'empty_response'],[Error('The message port closed before a response was received.'),'port_closed'],[Error('A listener indicated an asynchronous response, but the message channel closed before a response was received'),'port_closed'],[Error('No tab with id: 99.'),'tab_missing'],[Error('Cannot access contents of url https://PRIVATE_URL_TOKEN'),'access_denied'],[Error('PRIVATE_COOKIE arbitrary failure'),'message_failed'],[Error('probe_timeout'),'timed_out']]){
++   probeReply=reply;await vm.runInContext('reportDiagnostics()',context);
++   const snapshot=JSON.parse(fetches.at(-1).options.body).p_state;
++   assert.equal(snapshot.probe_error,error);assert.equal(JSON.stringify(snapshot).includes('PRIVATE_'),false);
++ }
++ probeReply=Error('Receiving end does not exist');
+  tabInfo={status:'loading',url:'about:blank',pendingUrl:url+'?xsec_token=PRIVATE_URL_TOKEN'};
+  await vm.runInContext('reportDiagnostics()',context);
+  const blankReport=JSON.parse(fetches.at(-1).options.body).p_state;

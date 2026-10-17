@@ -1,0 +1,16 @@
+baf4534ef9aba235346e2229a8e9f4f0721dd3fa3135f55111dd837726125b36  crowd-v4.2.54-extension.zip
+cfa80be0f6bd59ea5f571c6bf805707b0fbda946ad28c587140f1b7b3bf22ebd  crowd-v4.2.55-recovery-extension.zip
+3b267dc37f577333b81196c79886aaf28373e96e0c858012c3b8153723e77a64  crowd-v4.2.54-mac.zip
+b7063084947e42d88c098948705d1765f8ef2eaec38e77e889bdbf7685f0b3f4  crowd-v4.2.56-extension.zip
+38a3b66c2aec14013e493277c12015cd10c6e0cacf9a9696e48de59b7294affc  crowd-v4.2.57-recovery-extension.zip
+5c55df5ea1b8970c8c21879e3c7205fcef2423c576e61144ae89901427c23c6c  crowd-v4.2.56-mac.zip
+a1838bf052fd569f3b04f2c9a09a59134fbefbc28779760d22e536d9e80d4f5a  crowd-v4.2.58-extension.zip
+74b19c3b3ce00a3a3d96714c1c02fceaf90e9363c3c1ef3601ff806b6dcbd410  crowd-v4.2.59-recovery-extension.zip
+ddaf92d3adb2e758950db8217e0d67d798ecb79b1c96eeadca270ce1a11de188  crowd-v4.2.58-mac.zip
+1cd8602c3b39d1d072ef363e273c6e7503b758c311b3997d00f0999d18ad5fe7  crowd-v4.2.58-existing-helper-reconnect.zip
+87a740fac60b8b5ea27bf463ddb557280e86d59fafd15ee2179f41587fc8123c  crowd-v4.2.60-extension.zip
+d6e54f155483f0039f5562c665d187aa43b446c9f1435db25569a9cbec03610d  crowd-v4.2.60-mac.zip
+f44a64979f93ac4d1928de5119c3bde42993ed71b695d3bd33a9a8eff93865cf  crowd-v4.2.60-existing-helper-reconnect.zip
+2b6d6b3bf9abc82cae16207d14fec310d7f16a9f5f5a7bbfef1c39135c2cf66d  crowd-v4.2.61-recovery-extension.zip
+a4f5f4452084a232723a4988cee30b2f0b77e6eed935023b21521aa664311b54  install-guide-4.2.60.html
+6c948a1ed4bd4e85df2a305c6fb8bf94348dd88ad8e163f92505c507cccaf23a  install-guide-4.2.60.md

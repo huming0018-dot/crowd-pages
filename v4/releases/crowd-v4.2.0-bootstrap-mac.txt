@@ -1,0 +1,15 @@
+众包插件 4.2.0：一次接通自动更新
+
+适用于原先已参与的 Mac（macOS 14 或以上，Intel / Apple 芯片均可）。使用原浏览器和个人资料，不卸载、不重新报名。请保留浏览器开发者模式。
+
+1. 在原插件点“停止”。
+2. 在这台故障 Mac 的“终端”粘贴下面整行命令并回车。
+3. 在自动打开的扩展管理页刷新原插件一次，确认版本4.2.0和“更新助手已接通”，再点“继续采集”。
+
+crowd_bootstrap_dir="$(mktemp -d)" && curl --fail --location --proto '=https' --tlsv1.2 'https://raw.githubusercontent.com/huming0018-dot/crowd-pages/89e6c534f6dbcb56e80fadce5bdfdcae473e98a4/v4/releases/crowd-v4.2.0-bootstrap-mac.zip' -o "$crowd_bootstrap_dir/bootstrap.zip" && printf '%s  %s\n' 'decb62719219bdce65e19fb73845bb41514d32e3158c5b267e618d75fe573be6' "$crowd_bootstrap_dir/bootstrap.zip" | shasum -a 256 -c - && ditto -x -k "$crowd_bootstrap_dir/bootstrap.zip" "$crowd_bootstrap_dir" && /bin/bash "$crowd_bootstrap_dir/Mac众包更新/更新.command"
+
+本次命令下载固定提交的包并核对摘要，自动解压、更新原插件目录、安装专用本机更新助手及失败恢复任务，不需要管理员密码。首次接通仍需上述一次刷新：原4.1.2没有安装更新助手，服务器不能替它增加本机能力。
+
+接通后浏览器运行时每小时检查签名更新，校验文件后只重载本插件，不关闭Chrome/Edge，不删除参与身份、同意、停止状态和未回传证据。插件内可以关闭自动更新。新增浏览器权限仅用于与本机更新助手通信；不修改浏览器管理策略。
+
+真实Chrome自动升级与坏代码回退已通过隔离实机测试；Intel完成通用构建，未做独立Intel硬件验收。原设备是否恢复采集仍由实际导航和服务端入库回执确认。不要用升级成功替代采集成功。
