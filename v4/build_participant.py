@@ -73,6 +73,7 @@ def build(extension, helper, output, pro_runtime=None):
     base = {
         helper_name: helper.read_bytes(),
         'reconnect.command': (ROOT / 'participant/reconnect.command').read_bytes(),
+        'browser-preflight.command': (ROOT / 'participant/browser-preflight.command').read_bytes(),
         'MIGRATION-README.md': (ROOT / 'participant/MIGRATION-README.md').read_bytes(),
         'browser-preflight.js': (ROOT / 'participant/browser-preflight.js').read_text().replace('@EXTENSION_KEY@', extension_key).encode(),
     }
@@ -95,10 +96,10 @@ def build(extension, helper, output, pro_runtime=None):
             pro_files['pro-runtime/' + name] = path.read_bytes()
         pro_files['pro-runtime/PRO-RUNTIME.json'] = (runtime / 'PRO-RUNTIME.json').read_bytes()
         pro_files['configure-pro.py'] = (ROOT / 'participant/configure-pro.py').read_bytes()
-    base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js')).encode()
+    base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command')).encode()
     install = {**base, **pro_files, archive_name: extension.read_bytes()}
     install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).encode()
-    install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js', *sorted(pro_files))).encode()
+    install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command', 'install.command', *sorted(pro_files))).encode()
     guide = (ROOT / 'participant/安装说明.html').read_text().replace('@VERSION@', version)
     errors = {
         'os': ('这台 Mac 的系统版本还不够', '本包需要 macOS 14 或更新系统。此次未安装，请先更新系统或联系邀请人。'),
@@ -127,7 +128,7 @@ def build(extension, helper, output, pro_runtime=None):
     reconnect['install.command'] = ("#!/bin/zsh\nset -eu\nPACKAGE_DIR=\"${0:A:h}\"\ncd \"$PACKAGE_DIR\"\n"
         "if ./reconnect.command; then /usr/bin/open \"$PACKAGE_DIR/existing.html\" || true; "
         "else /usr/bin/open \"$PACKAGE_DIR/help.html\" || true; exit 1; fi\n").encode()
-    source_files = ['build_participant.py', 'participant/install.command', 'participant/browser-preflight.js', 'participant/reconnect.command',
+    source_files = ['build_participant.py', 'participant/install.command', 'participant/browser-preflight.js', 'participant/browser-preflight.command', 'participant/reconnect.command',
                     'participant/configure-pro.py', 'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
     provenance = {'package_revision': 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()),
                   'helper_sha256': digest(helper.read_bytes()), 'pro_runtime_files': {name: digest(data) for name, data in pro_files.items()},

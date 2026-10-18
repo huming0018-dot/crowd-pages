@@ -8,7 +8,7 @@ if [[ ! -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; th
   exit 1
 fi
 ORIGINAL_DIR="$(/usr/bin/plutil -extract directory raw -expect string -o - "$HOME/Library/Application Support/CrowdV4Updater/config.json" 2>/dev/null || true)"
-BROWSER_CHECK="$(/usr/bin/osascript -l JavaScript "$PACKAGE_DIR/browser-preflight.js" "$HOME/Library/Application Support/Google/Chrome" "$ORIGINAL_DIR" 2>/dev/null || true)"
+BROWSER_CHECK="$("$PACKAGE_DIR/browser-preflight.command" "$ORIGINAL_DIR" 2>/dev/null || true)"
 if [[ "$BROWSER_CHECK" != clear && "$BROWSER_CHECK" != compatible_registered ]]; then
   print 'Chrome 原插件与标准更新路径尚未核对。本次没有接续；请保留旧插件、身份和任务，把提示交给邀请人。'
   exit 1

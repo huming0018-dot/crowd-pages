@@ -73,13 +73,7 @@ if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
   ORIGINAL_DIR="$(/usr/bin/plutil -extract directory raw -expect string -o - "$HOME/Library/Application Support/CrowdV4Updater/config.json" 2>/dev/null || true)"
 fi
 # Absence of a native helper does not mean Chrome has no older same-ID extension.
-PRO_SETTINGS="$HOME/Library/Application Support/CrowdV4Updater/pro-install-settings.json"
-NATIVE_CONFIG="$HOME/Library/Application Support/CrowdV4Updater/config.json"
-if [[ -n "$ORIGINAL_DIR" && -f "$PRO_SETTINGS" && -f "$NATIVE_CONFIG" ]]; then
-  BROWSER_CHECK="$(/usr/bin/osascript -l JavaScript "$PACKAGE_DIR/browser-preflight.js" "$HOME/Library/Application Support/Google/Chrome" "$ORIGINAL_DIR" "$PRO_SETTINGS" "$NATIVE_CONFIG" 2>/dev/null || true)"
-else
-  BROWSER_CHECK="$(/usr/bin/osascript -l JavaScript "$PACKAGE_DIR/browser-preflight.js" "$HOME/Library/Application Support/Google/Chrome" "$ORIGINAL_DIR" 2>/dev/null || true)"
-fi
+BROWSER_CHECK="$("$PACKAGE_DIR/browser-preflight.command" "$ORIGINAL_DIR" 2>/dev/null || true)"
 case "$BROWSER_CHECK" in
   clear|compatible_registered) ;;
   legacy_browser_extension) fail browser-legacy 'Chrome 已安装旧版众包插件，可能有正在进行的任务。原插件、身份和记录保留；本次不覆盖，请联系邀请人安全接续。' ;;
@@ -94,10 +88,12 @@ if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
   if ! ./crowd-v4-participant-updater --check-install "$ORIGINAL_DIR"; then
     fail incompatible '原扩展与本参与者更新不兼容（例如旧 KOL 安装）。已保留原样，请联系邀请人使用对应版本。'
   fi
+  # Prepare own Python only after exact native preflight, before this reconnect
+  # starts new launchd polls which may immediately compete for update.lock.
+  configure_pro_if_present
   if ! ./reconnect.command; then
     fail busy '原安装暂时无法接续，可能正在采集或更新。没有强制切换，请等原插件空闲后重试；仍失败请联系邀请人。'
   fi
-  configure_pro_if_present
   INSTALL_SUCCESS=true
   print '[3/3] 原安装已接续。请看刚打开的说明页；等待原插件空闲完成更新。'
   /usr/bin/open -a 'Google Chrome' "$PACKAGE_DIR/existing.html" || /usr/bin/open "$PACKAGE_DIR/existing.html" || true
