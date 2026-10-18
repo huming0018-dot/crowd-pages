@@ -26,6 +26,21 @@ fail() {
   print -r -- "$2"
   exit 1
 }
+# Pro uses only an existing licensed local installation. No SDK/profile is bundled.
+configure_pro_if_present() {
+  local pro_settings="$HOME/Library/Application Support/CrowdV4Updater/pro-install-settings.json"
+  if [[ -f "$PACKAGE_DIR/configure-pro.py" && -f "$PACKAGE_DIR/pro-runtime/PRO-RUNTIME.json" && -f "$pro_settings" && ! -L "$pro_settings" ]]; then
+    local pro_python
+    pro_python="$(/usr/bin/plutil -extract python raw -o - "$pro_settings" 2>/dev/null || true)"
+    if [[ "$pro_python" == /* && -x "$pro_python" ]]; then
+      if "$pro_python" -B "$PACKAGE_DIR/configure-pro.py" --runtime "$PACKAGE_DIR/pro-runtime" --settings "$pro_settings"; then
+        print 'Pro 本地适配器已准备；原绑定和采集记录保留。插件还会核对本机依赖后显示就绪。'
+        return 0
+      fi
+    fi
+  fi
+  print 'Pro 尚未就绪：需要本机已有授权 SDK、Python 环境和原账号绑定；本包不会下载私有 SDK 或替换账号。'
+}
 print '\n众包采集安装助手：无需输入命令，请等待自动检查。'
 print '[1/3] 检查安装包…'
 if ! /usr/bin/shasum -a 256 -c INSTALL-SHA256.txt; then
@@ -76,6 +91,7 @@ if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
   if ! ./reconnect.command; then
     fail busy '原安装暂时无法接续，可能正在采集或更新。没有强制切换，请等原插件空闲后重试；仍失败请联系邀请人。'
   fi
+  configure_pro_if_present
   INSTALL_SUCCESS=true
   print '[3/3] 原安装已接续。请看刚打开的说明页；等待原插件空闲完成更新。'
   /usr/bin/open -a 'Google Chrome' "$PACKAGE_DIR/existing.html" || /usr/bin/open "$PACKAGE_DIR/existing.html" || true
@@ -98,6 +114,7 @@ if ! ./crowd-v4-participant-updater --install "$INSTALL_DIR" 'Google Chrome'; th
   fail busy '系统未能完成助手安装。请保留终端错误并联系邀请人；不要删除原扩展或关闭系统保护。'
 fi
 /bin/rm -- "$INSTALL_DIR/.crowd-install-owner"
+configure_pro_if_present
 INSTALL_SUCCESS=true
 print '[3/3] 安装文件已准备完成。Chrome 的加载确认需要你本人完成。'
 print -r -- "$INSTALL_DIR" | /usr/bin/pbcopy || true

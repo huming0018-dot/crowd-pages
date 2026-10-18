@@ -51,7 +51,7 @@ def pack(path, files):
     return {'path': str(path), 'bytes': path.stat().st_size, 'sha256': checksum}
 
 
-def build(extension, helper, output):
+def build(extension, helper, output, pro_runtime=None):
     extension, helper, output = Path(extension).resolve(), Path(helper).resolve(), Path(output).resolve()
     version, files = extension_files(extension)
     if set(subprocess.check_output(['lipo', '-archs', str(helper)], text=True).split()) != {'x86_64', 'arm64'}:
@@ -76,10 +76,29 @@ def build(extension, helper, output):
         'MIGRATION-README.md': (ROOT / 'participant/MIGRATION-README.md').read_bytes(),
         'browser-preflight.js': (ROOT / 'participant/browser-preflight.js').read_text().replace('@EXTENSION_KEY@', extension_key).encode(),
     }
+    # Optional own-code runtime. Licensed SDK, venv, profiles and bindings stay local.
+    pro_files = {}
+    if pro_runtime is not None:
+        runtime = Path(pro_runtime).resolve()
+        metadata = json.loads((runtime / 'PRO-RUNTIME.json').read_bytes())
+        if set(metadata) != {'schema', 'files'} or metadata['schema'] != 'crowd-participant-pro-runtime-v1':
+            raise ValueError('invalid Pro own-runtime manifest')
+        names = metadata['files']
+        if not isinstance(names, dict) or not 1 <= len(names) <= 128 or 'participant_pro_native.py' not in names:
+            raise ValueError('incomplete Pro own-runtime manifest')
+        for name, expected in names.items():
+            if not ((re.fullmatch(r'[a-z][a-z0-9_]*[.]py', name) and not name.startswith('test_')) or name in {'SIGN-SOURCE-SHA.json','DEPENDENCIES.json','DEPENDENCY-SHA.json','NODE-SHA.json'}):
+                raise ValueError('own Python modules only')
+            path = runtime / name
+            if path.is_symlink() or not path.is_file() or digest(path.read_bytes()) != expected:
+                raise ValueError('Pro own-runtime hash mismatch')
+            pro_files['pro-runtime/' + name] = path.read_bytes()
+        pro_files['pro-runtime/PRO-RUNTIME.json'] = (runtime / 'PRO-RUNTIME.json').read_bytes()
+        pro_files['configure-pro.py'] = (ROOT / 'participant/configure-pro.py').read_bytes()
     base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js')).encode()
-    install = {**base, archive_name: extension.read_bytes()}
+    install = {**base, **pro_files, archive_name: extension.read_bytes()}
     install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).encode()
-    install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js')).encode()
+    install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js', *sorted(pro_files))).encode()
     guide = (ROOT / 'participant/安装说明.html').read_text().replace('@VERSION@', version)
     errors = {
         'os': ('这台 Mac 的系统版本还不够', '本包需要 macOS 14 或更新系统。此次未安装，请先更新系统或联系邀请人。'),
@@ -109,9 +128,9 @@ def build(extension, helper, output):
         "if ./reconnect.command; then /usr/bin/open \"$PACKAGE_DIR/existing.html\" || true; "
         "else /usr/bin/open \"$PACKAGE_DIR/help.html\" || true; exit 1; fi\n").encode()
     source_files = ['build_participant.py', 'participant/install.command', 'participant/browser-preflight.js', 'participant/reconnect.command',
-                    'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
+                    'participant/configure-pro.py', 'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
     provenance = {'package_revision': 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()),
-                  'helper_sha256': digest(helper.read_bytes()),
+                  'helper_sha256': digest(helper.read_bytes()), 'pro_runtime_files': {name: digest(data) for name, data in pro_files.items()},
                   'source_sha256': {name: digest((ROOT / name).read_bytes()) for name in source_files}}
     install['package-source.json'] = (json.dumps(provenance, ensure_ascii=False, indent=2) + '\n').encode()
     reconnect['package-source.json'] = install['package-source.json']
@@ -127,5 +146,6 @@ if __name__ == '__main__':
     parser.add_argument('--extension', type=Path, required=True)
     parser.add_argument('--helper', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--pro-runtime', type=Path)
     options = parser.parse_args()
-    print(json.dumps(build(options.extension, options.helper, options.output)))
+    print(json.dumps(build(options.extension, options.helper, options.output, options.pro_runtime)))
