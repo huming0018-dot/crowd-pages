@@ -3,7 +3,7 @@ ObjC.import('Foundation');
 function run(args) {
   var extensionID = 'licijehcpohikchlnkbpjdjdfkcocndg';
   var expectedKey = '@EXTENSION_KEY@';
-  var fm = $.NSFileManager.defaultManager, found = 0;
+  var fm = $.NSFileManager.defaultManager;
   function fail(reason) { throw new Error(reason); }
   function object(value) { return value && typeof value === 'object' && !Array.isArray(value); }
   function fileInfo(path) {
@@ -37,9 +37,8 @@ function run(args) {
     if (!object(value)) fail('browser_inventory_unavailable');
     return value;
   }
-  try {
-    if (args.length !== 2 || !args[0] || args[0][0] !== '/') fail('browser_inventory_unavailable');
-    var root = normalize(args[0]), expected = args[1] ? normalize(args[1]) : '';
+  function scan(root, expected, passive, bound) {
+    var found = 0;
     if (!exists(root)) return 'clear';
     if (attributes(root).NSFileType !== 'NSFileTypeDirectory') fail('browser_inventory_unavailable');
     var listing = fm.contentsOfDirectoryAtPathError(root, null);
@@ -71,22 +70,60 @@ function run(args) {
         found++;
         if (entry.manifest && (!object(entry.manifest) || typeof entry.manifest.version !== 'string')) fail('browser_inventory_unavailable');
         var remembered = entry.manifest && entry.manifest.version;
-        if (remembered && !/^4\.2\.\d{1,3}$/.test(remembered)) fail('legacy_browser_extension');
+        if (!passive && remembered && !/^4\.2\.\d{1,3}$/.test(remembered)) fail('legacy_browser_extension');
         if (typeof entry.path !== 'string' || !entry.path || /[\x00-\x1f\x7f]/.test(entry.path)) fail('browser_inventory_unavailable');
         if (entry.path[0] !== '/' && entry.path.split('/').indexOf('..') !== -1) fail('browser_inventory_unavailable');
         var source = normalize(entry.path[0] === '/' ? entry.path : profile + '/Extensions/' + entry.path);
         if (!exists(source) || attributes(source).NSFileType !== 'NSFileTypeDirectory') fail('browser_inventory_unavailable');
         var manifest = read(source + '/manifest.json');
         if (typeof manifest.version !== 'string') fail('browser_inventory_unavailable');
-        if (!/^4\.2\.\d{1,3}$/.test(manifest.version)) fail('legacy_browser_extension');
+        if (!passive && !/^4\.2\.\d{1,3}$/.test(manifest.version)) fail('legacy_browser_extension');
         if (manifest.key !== expectedKey || (entry.manifest && entry.manifest.key && entry.manifest.key !== expectedKey)) fail('browser_inventory_unavailable');
         if (remembered && remembered !== manifest.version) fail('browser_inventory_unavailable');
+        if (passive) {
+          // Only this observed legacy family may coexist in another profile; it cannot call the host.
+          if (source === expected || /^4\.2\./.test(manifest.version)) fail('browser_reconnect_required');
+          if (manifest.version !== '3.5.3' || !Array.isArray(manifest.permissions) || manifest.permissions.some(function(x){return typeof x !== 'string';}) || manifest.permissions.indexOf('nativeMessaging') !== -1 ||
+              (manifest.optional_permissions !== undefined && (!Array.isArray(manifest.optional_permissions) || manifest.optional_permissions.length !== 0)) ||
+              manifest.externally_connectable !== undefined) fail('legacy_browser_extension');
+          continue;
+        }
+        if (bound && (!Array.isArray(manifest.permissions) || manifest.permissions.indexOf('nativeMessaging') === -1 ||
+            !Array.isArray(manifest.host_permissions) || manifest.host_permissions.indexOf('https://www.xiaohongshu.com/*') === -1 || manifest.host_permissions.indexOf('https://m.xiaohongshu.com/*') === -1)) fail('browser_inventory_unavailable');
         paths.push(source); versions.push(manifest.version);
         if (paths.some(function(value) { return value !== paths[0]; }) || versions.some(function(value) { return value !== versions[0]; })) fail('browser_inventory_unavailable');
         if (!expected || source !== expected) fail('browser_reconnect_required');
       }
     }
     return found ? 'compatible_registered' : 'clear';
+  }
+  function privateMetadata(path) {
+    var info = attributes(path), home = attributes(ObjC.unwrap($.NSHomeDirectory()));
+    if (info.NSFileOwnerAccountID !== home.NSFileOwnerAccountID || Number(info.NSFilePosixPermissions) !== 384 || Number(info.NSFileSize) > 16384) fail('browser_inventory_unavailable');
+    return read(path);
+  }
+  try {
+    if ((args.length !== 2 && args.length !== 4) || !args[0] || args[0][0] !== '/') fail('browser_inventory_unavailable');
+    var root = normalize(args[0]), expected = args[1] ? normalize(args[1]) : '';
+    if (args.length === 2) return scan(root, expected, false, false);
+    if (!expected || !args[2] || args[2][0] !== '/' || !args[3] || args[3][0] !== '/') fail('browser_inventory_unavailable');
+    var config = privateMetadata(args[3]), settings = privateMetadata(args[2]);
+    if (config.directory !== expected || config.extension_key !== expectedKey ||
+        Object.keys(settings).sort().join(',') !== 'max_api_requests,mc_root,purpose,python,root,session_id' ||
+        typeof settings.root !== 'string' || settings.root[0] !== '/' || settings.root !== normalize(settings.root) ||
+        typeof settings.python !== 'string' || settings.python[0] !== '/' || typeof settings.mc_root !== 'string' || settings.mc_root[0] !== '/' ||
+        typeof settings.session_id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(settings.session_id) ||
+        typeof settings.max_api_requests !== 'number' || Math.floor(settings.max_api_requests) !== settings.max_api_requests || settings.max_api_requests < 1 || settings.max_api_requests > 100 || settings.purpose !== 'noncommercial_research') fail('browser_inventory_unavailable');
+    var session = settings.root + '/sessions/' + settings.session_id;
+    for (var i = 0, dirs = [settings.root, settings.root + '/sessions', session, session + '/browser_data']; i < dirs.length; i++) {
+      if (attributes(dirs[i]).NSFileType !== 'NSFileTypeDirectory') fail('browser_inventory_unavailable');
+    }
+    var identity = read(session + '/identity.json');
+    if (Object.keys(identity).join(',') !== 'platform' || identity.platform !== 'xhs') fail('browser_inventory_unavailable');
+    var target = session + '/browser_data/xhs_bridge_profile';
+    if (scan(target, expected, false, true) !== 'compatible_registered') fail('browser_inventory_unavailable');
+    if (target !== root) scan(root, expected, true, false);
+    return 'compatible_registered';
   } catch (error) {
     return ['legacy_browser_extension', 'browser_reconnect_required'].indexOf(error.message) !== -1 ? error.message : 'browser_inventory_unavailable';
   }

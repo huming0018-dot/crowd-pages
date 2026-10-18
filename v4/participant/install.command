@@ -73,7 +73,13 @@ if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
   ORIGINAL_DIR="$(/usr/bin/plutil -extract directory raw -expect string -o - "$HOME/Library/Application Support/CrowdV4Updater/config.json" 2>/dev/null || true)"
 fi
 # Absence of a native helper does not mean Chrome has no older same-ID extension.
-BROWSER_CHECK="$(/usr/bin/osascript -l JavaScript "$PACKAGE_DIR/browser-preflight.js" "$HOME/Library/Application Support/Google/Chrome" "$ORIGINAL_DIR" 2>/dev/null || true)"
+PRO_SETTINGS="$HOME/Library/Application Support/CrowdV4Updater/pro-install-settings.json"
+NATIVE_CONFIG="$HOME/Library/Application Support/CrowdV4Updater/config.json"
+if [[ -n "$ORIGINAL_DIR" && -f "$PRO_SETTINGS" && -f "$NATIVE_CONFIG" ]]; then
+  BROWSER_CHECK="$(/usr/bin/osascript -l JavaScript "$PACKAGE_DIR/browser-preflight.js" "$HOME/Library/Application Support/Google/Chrome" "$ORIGINAL_DIR" "$PRO_SETTINGS" "$NATIVE_CONFIG" 2>/dev/null || true)"
+else
+  BROWSER_CHECK="$(/usr/bin/osascript -l JavaScript "$PACKAGE_DIR/browser-preflight.js" "$HOME/Library/Application Support/Google/Chrome" "$ORIGINAL_DIR" 2>/dev/null || true)"
+fi
 case "$BROWSER_CHECK" in
   clear|compatible_registered) ;;
   legacy_browser_extension) fail browser-legacy 'Chrome 已安装旧版众包插件，可能有正在进行的任务。原插件、身份和记录保留；本次不覆盖，请联系邀请人安全接续。' ;;
