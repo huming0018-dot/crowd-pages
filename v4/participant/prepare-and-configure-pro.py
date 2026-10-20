@@ -13,11 +13,15 @@ def load(name, path):
     return module
 
 
-def install(deps, configure, descriptor, settings, runtime, helper):
+def install(deps, configure, descriptor, settings, runtime, helper, continuation_factory=None):
     # Dependency work does not modify settings, SDK files, account data or adapter pointers.
     prepared = deps.prepare(descriptor, helper)
     values = json.loads(deps.read(settings))
     plan = deps.plan(descriptor, helper)
+    if continuation_factory is not None:
+        continuation = continuation_factory(deps, prepared, plan, settings, runtime, helper)
+        deps.check(descriptor, helper, health=continuation.signer_ready)
+        return continuation.install(configure)
     deps.need(values.get('python') == prepared['python'] and
               values.get('mc_root') == plan['input']['projects']['pro']['root'],
               'dependency_binding_migration_required')
@@ -37,7 +41,8 @@ def main():
     deps = load('pro_dependencies', base / 'prepare-pro-dependencies.py')
     try:
         original = load('pro_configure', base / 'configure-pro.py')
-        result = install(deps, original.configure, args.descriptor, args.settings, args.runtime, args.helper_root)
+        continuation = load('pro_binding_continuation', base / 'pro-binding-continuation.py')
+        result = install(deps, original.configure, args.descriptor, args.settings, args.runtime, args.helper_root, continuation.BindingContinuation)
         print(json.dumps(result)); return 0
     except FileNotFoundError:
         print(json.dumps({'state': 'not_ready', 'error': 'dependency_binding_required'})); return 1

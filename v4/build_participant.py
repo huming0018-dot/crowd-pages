@@ -96,7 +96,7 @@ def build(extension, helper, output, pro_runtime=None):
             pro_files['pro-runtime/' + name] = path.read_bytes()
         pro_files['pro-runtime/PRO-RUNTIME.json'] = (runtime / 'PRO-RUNTIME.json').read_bytes()
         pro_files['configure-pro.py'] = (ROOT / 'participant/configure-pro.py').read_bytes()
-        for name in ('prepare-pro-dependencies.py', 'prepare-and-configure-pro.py'):
+        for name in ('prepare-pro-dependencies.py', 'prepare-and-configure-pro.py', 'pro-binding-continuation.py'):
             pro_files[name] = (ROOT / 'participant' / name).read_bytes()
     base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command')).encode()
     install = {**base, **pro_files, archive_name: extension.read_bytes()}
@@ -131,7 +131,7 @@ def build(extension, helper, output, pro_runtime=None):
         "if ./reconnect.command; then /usr/bin/open \"$PACKAGE_DIR/existing.html\" || true; "
         "else /usr/bin/open \"$PACKAGE_DIR/help.html\" || true; exit 1; fi\n").encode()
     source_files = ['build_participant.py', 'participant/install.command', 'participant/browser-preflight.js', 'participant/browser-preflight.command', 'participant/reconnect.command',
-                    'participant/configure-pro.py', 'participant/prepare-pro-dependencies.py', 'participant/prepare-and-configure-pro.py', 'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
+                    'participant/configure-pro.py', 'participant/prepare-pro-dependencies.py', 'participant/prepare-and-configure-pro.py', 'participant/pro-binding-continuation.py', 'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
     provenance = {'package_revision': 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()),
                   'helper_sha256': digest(helper.read_bytes()), 'pro_runtime_files': {name: digest(data) for name, data in pro_files.items()},
                   'source_sha256': {name: digest((ROOT / name).read_bytes()) for name in source_files}}

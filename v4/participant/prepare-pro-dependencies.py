@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import urllib.request
+from urllib.parse import urlsplit
 
 SCHEMA = 'crowd-pro-dependency-input-v1'
 PROJECT_KEYS = {'root', 'commit', 'files', 'python', 'python_sha256'}
@@ -156,13 +157,21 @@ def probes(p, run=execute):
             run([str(python), '-I', '-B', '-c', 'import tornado.web,playwright.async_api,httpx,pydantic,execjs,xhshow'], env=env, cwd=root, timeout=15)
 
 
-def signer_health():
-    # Existing service only, no proxy/redirect or user-supplied endpoint.
+def signer_health(sign_url):
+    # Diagnostic only: the caller supplies its validated original binding.
+    try:
+        url = urlsplit(sign_url)
+        valid = (url.scheme == 'http' and url.hostname in ('127.0.0.1', 'localhost')
+                 and url.port and not url.username and not url.password
+                 and url.path in ('', '/') and not url.query and not url.fragment)
+    except (TypeError, ValueError):
+        valid = False
+    need(valid, 'signer_binding_invalid')
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args, **kwargs):
             return None
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    with opener.open('http://127.0.0.1:8989/signsrv/pong', timeout=3) as response:
+    with opener.open(sign_url.rstrip('/') + '/signsrv/pong', timeout=3) as response:
         need(response.status == 200, 'signer_not_ready')
         raw = response.read(4097)
     need(len(raw) <= 4096, 'signer_not_ready')
@@ -215,10 +224,11 @@ def prepare(descriptor, helper, *, offline=False, run=execute):
             os.close(fd)
 
 
-def check(descriptor, helper, run=execute, health=signer_health):
+def check(descriptor, helper, run=execute, health=None):
     p = plan(descriptor, helper, run)
     receipt = json.loads(read(Path(p['target']) / 'RESULT.json'))
     need(receipt.get('state') == 'prepared' and receipt.get('key') == p['key'], 'dependency_attempt_unknown')
+    need(health is not None, 'signer_binding_required')
     probes(p, run); health()
     need(plan(descriptor, helper, run) == p, 'dependency_source_changed')
     return {'state': 'ready', 'key': p['key'], 'python': str(Path(p['target']) / 'pro/bin/python'), 'authenticated': False}
