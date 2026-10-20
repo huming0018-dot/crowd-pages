@@ -4,10 +4,19 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from test_pro_dependencies import D
 
 
 class Process(unittest.TestCase):
+    def setUp(self):
+        # This suite executes the original Python/uv fixture, not a Node download.
+        self.node_temp = tempfile.TemporaryDirectory(); self.addCleanup(self.node_temp.cleanup)
+        node = Path(self.node_temp.name)/'fixture-node'; node.write_bytes(b'fixture executable'); node.chmod(0o700)
+        for operation in ('prepare','check'):
+            fixture = patch.object(D.portable_node, operation, return_value=node)
+            fixture.start(); self.addCleanup(fixture.stop)
+
     def test_real_process_two_envs_fixed_online_command_and_protocol(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve(); helper = root/'helper'; helper.mkdir(mode=0o700)

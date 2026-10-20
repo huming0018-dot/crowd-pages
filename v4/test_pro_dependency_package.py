@@ -29,7 +29,8 @@ class Builder(unittest.TestCase):
             shutil.copyfile(extension_input,ext)
             helper=root/'helper';shutil.copyfile(helper_input,helper);helper.chmod(0o700)
             runtime=root/'runtime';runtime.mkdir();(runtime/'participant_pro_native.py').write_bytes(b'fixture own adapter')
-            (runtime/'PRO-RUNTIME.json').write_text(json.dumps({'schema':'crowd-participant-pro-runtime-v1','files':{'participant_pro_native.py':hashlib.sha256((runtime/'participant_pro_native.py').read_bytes()).hexdigest()}}))
+            (runtime/'portable_node.py').write_bytes((BASE/'participant/portable_node.py').read_bytes())
+            (runtime/'PRO-RUNTIME.json').write_text(json.dumps({'schema':'crowd-participant-pro-runtime-v1','files':{name:hashlib.sha256((runtime/name).read_bytes()).hexdigest() for name in ('participant_pro_native.py','portable_node.py')}}))
             output=root/'installer.zip';module.build(ext,helper,output,runtime)
             with zipfile.ZipFile(output) as archive:
                 for name in ['prepare-pro-dependencies.py','prepare-and-configure-pro.py']:

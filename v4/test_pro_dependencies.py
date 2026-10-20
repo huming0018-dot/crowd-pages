@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 BASE = Path(__file__).resolve().parent
 
@@ -34,6 +35,11 @@ class Dependencies(unittest.TestCase):
         self.descriptor = self.helper / 'input.json'; self.save()
         self.settings = self.helper / 'pro-install-settings.json'; self.settings.write_text('{"old":"preserved"}'); self.settings.chmod(0o600)
         self.old = self.settings.read_bytes()
+        # Existing Python/uv unit fixtures do not acquire a real Node resource.
+        # Full resource validation is tested by test_portable_node's18 cases.
+        for operation in ('prepare','check'):
+            fixture = patch.object(D.portable_node, operation, side_effect=lambda helper, **kw: self.binary)
+            fixture.start(); self.addCleanup(fixture.stop)
 
     def save(self):
         self.descriptor.write_bytes(D.encode(self.value)); self.descriptor.chmod(0o600)

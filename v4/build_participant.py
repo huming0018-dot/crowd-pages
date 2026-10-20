@@ -95,6 +95,7 @@ def build(extension, helper, output, pro_runtime=None):
                 raise ValueError('Pro own-runtime hash mismatch')
             pro_files['pro-runtime/' + name] = path.read_bytes()
         pro_files['pro-runtime/PRO-RUNTIME.json'] = (runtime / 'PRO-RUNTIME.json').read_bytes()
+        pro_files['portable_node.py'] = pro_files['pro-runtime/portable_node.py']
         pro_files['configure-pro.py'] = (ROOT / 'participant/configure-pro.py').read_bytes()
         for name in ('prepare-pro-dependencies.py', 'prepare-and-configure-pro.py', 'pro-binding-continuation.py'):
             pro_files[name] = (ROOT / 'participant' / name).read_bytes()

@@ -24,3 +24,10 @@ Signer 仍由原 Pro 每次 run 管理，空闲无需常驻监听。安装只用
 当前受审 runtime 的 Node pin 包含原机路径；新 Mac 缺合法 SDK、Node 或 Signer 描述符须明确 not_ready。本接续不等于新机注册、平台认证或来源采集已验收。
 
 The original mc_root remains the MediaCrawler fallback. Selected Pro SDK source is authoritative only in root/pro-executor.json and must match the pinned official dependency descriptor; continuation never rewrites the fallback field.
+
+
+## Portable Node 资源（仅新源码合同）
+
+新准备/check复用原依赖入口，固定 Node v22.23.2 官方 macOS arm64/x64 archive SHA；安装到当前用户助手的 `node-runtime/<version>-darwin-<arch>`，不修改旧 `NODE-SHA.json` 或用户 PATH。单一自有码 `portable_node.py` 由包内校验后同字节放入安装器顶层和Pro runtime，INSTALL-SHA覆盖两份；Signer仍按原run启动/停止，不新增daemon。prepare会取得公开Node资源，check只校验；未知INTENT不自动续装。Node LICENSE/第三方声明保留，私ProSDK/账号仍只本地合法引用。
+
+产品回归：`/usr/bin/python3 -B test_portable_node.py`（18项），MP默认相邻crowd-kol或显式 `CROWD_MULTIPLATFORM_DIR`，缺仓/源码硬失败不skip；原G29三脚本32项继续运行。操作司机16项保留隔离审计证据，不加入正式回归。arm64官方二进制已离线核等原trustedSHA且原ExecJS成功；PGP未验证、x64未实跑，不冒通用新Mac完成。正式源码接入不更新已安装113文件runtime；当前assembler完整own源码119加新module为120，保原128边界，后续独立组包/签名/本机采用与中央能力登记另验，不把Node源码合入当运行时就绪。

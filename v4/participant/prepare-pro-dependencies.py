@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import urllib.request
+import portable_node
 from urllib.parse import urlsplit
 
 SCHEMA = 'crowd-pro-dependency-input-v1'
@@ -198,6 +199,7 @@ def prepare(descriptor, helper, *, offline=False, run=execute):
             receipt = json.loads(read(target / 'RESULT.json')) if (target / 'RESULT.json').exists() else None
             need(receipt == {'state': 'prepared', 'key': p['key'], 'offline': offline}, 'dependency_attempt_unknown')
             probes(p, run)
+            portable_node.prepare(helper, offline=offline)
             return {'state': 'prepared', 'key': p['key'], 'python': str(target / 'pro/bin/python'), 'authenticated': False}
         safe_directory(target)
         write_once(target / 'INTENT.json', {'plan': p, 'offline': offline})
@@ -215,6 +217,7 @@ def prepare(descriptor, helper, *, offline=False, run=execute):
                     raise ValueError('dependency_%s_sync_failed' % name) from None
                 raise
             need(plan(descriptor, helper, run) == p, 'dependency_source_changed')
+        portable_node.prepare(helper, offline=offline)
         probes(p, run)
         need(plan(descriptor, helper, run) == p, 'dependency_source_changed')
         write_once(target / 'RESULT.json', {'state': 'prepared', 'key': p['key'], 'offline': offline})
@@ -229,7 +232,7 @@ def check(descriptor, helper, run=execute, health=None):
     receipt = json.loads(read(Path(p['target']) / 'RESULT.json'))
     need(receipt.get('state') == 'prepared' and receipt.get('key') == p['key'], 'dependency_attempt_unknown')
     need(health is not None, 'signer_binding_required')
-    probes(p, run); health()
+    probes(p, run); portable_node.check(helper); health()
     need(plan(descriptor, helper, run) == p, 'dependency_source_changed')
     return {'state': 'ready', 'key': p['key'], 'python': str(Path(p['target']) / 'pro/bin/python'), 'authenticated': False}
 
