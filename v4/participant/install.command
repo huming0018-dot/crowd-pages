@@ -29,6 +29,17 @@ fail() {
 # Pro uses only an existing licensed local installation. No SDK/profile is bundled.
 configure_pro_if_present() {
   local pro_settings="$HOME/Library/Application Support/CrowdV4Updater/pro-install-settings.json"
+  local pro_helper="$HOME/Library/Application Support/CrowdV4Updater"
+  local pro_dependencies="$pro_helper/pro-dependency-settings.json"
+  if [[ -f "$pro_dependencies" && ! -L "$pro_dependencies" ]]; then
+    print '正在按官方锁文件准备 Pro 和签名服务依赖；不下载私有 SDK、不启动采集。'
+    if /usr/bin/python3 -B "$PACKAGE_DIR/prepare-and-configure-pro.py" --descriptor "$pro_dependencies" --settings "$pro_settings" --runtime "$PACKAGE_DIR/pro-runtime" --helper-root "$pro_helper"; then
+      print 'Pro 依赖与原适配器已核验；平台登录仍由原账号核验。'
+    else
+      print 'Pro 依赖/签名服务/绑定尚未就绪，原设置与采集记录保持；请保留上方固定错误。'
+    fi
+    return 0
+  fi
   if [[ -f "$PACKAGE_DIR/configure-pro.py" && -f "$PACKAGE_DIR/pro-runtime/PRO-RUNTIME.json" && -f "$pro_settings" && ! -L "$pro_settings" ]]; then
     local pro_python
     pro_python="$(/usr/bin/plutil -extract python raw -o - "$pro_settings" 2>/dev/null || true)"
