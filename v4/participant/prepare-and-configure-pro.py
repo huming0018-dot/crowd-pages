@@ -21,6 +21,10 @@ def install(deps, configure, descriptor, settings, runtime, helper, continuation
     if continuation_factory is not None:
         continuation = continuation_factory(deps, prepared, plan, settings, runtime, helper)
         deps.check(descriptor, helper, health=continuation.signer_ready)
+        if 'downloader' in json.loads(deps.read(descriptor)):
+            media = load('pro_downloader_dependencies', Path(__file__).with_name('prepare-pro-downloader.py'))
+            media.prepare(deps, descriptor, helper)
+            media.provision(deps, descriptor, helper, continuation)
         return continuation.install(configure)
     deps.need(values.get('python') == prepared['python'] and
               values.get('mc_root') == plan['input']['projects']['pro']['root'],

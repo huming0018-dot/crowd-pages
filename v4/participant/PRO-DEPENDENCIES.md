@@ -31,3 +31,10 @@ The original mc_root remains the MediaCrawler fallback. Selected Pro SDK source 
 新准备/check复用原依赖入口，固定 Node v22.23.2 官方 macOS arm64/x64 archive SHA；安装到当前用户助手的 `node-runtime/<version>-darwin-<arch>`，不修改旧 `NODE-SHA.json` 或用户 PATH。单一自有码 `portable_node.py` 由包内校验后同字节放入安装器顶层和Pro runtime，INSTALL-SHA覆盖两份；Signer仍按原run启动/停止，不新增daemon。prepare会取得公开Node资源，check只校验；未知INTENT不自动续装。Node LICENSE/第三方声明保留，私ProSDK/账号仍只本地合法引用。
 
 产品回归：`/usr/bin/python3 -B test_portable_node.py`（18项），MP默认相邻crowd-kol或显式 `CROWD_MULTIPLATFORM_DIR`，缺仓/源码硬失败不skip；原G29三脚本32项继续运行。操作司机16项保留隔离审计证据，不加入正式回归。arm64官方二进制已离线核等原trustedSHA且原ExecJS成功；PGP未验证、x64未实跑，不冒通用新Mac完成。正式源码接入不更新已安装113文件runtime；当前assembler完整own源码119加新module为120，保原128边界，后续独立组包/签名/本机采用与中央能力登记另验，不把Node源码合入当运行时就绪。
+
+
+## 自有 XHS 下载资源的组装
+
+运行包在既有 Python 与四个元数据文件之外，仅显式接收 `pro_xhs_download.mjs`。它必须在外部 source pins 与 `PRO-RUNTIME.json` 中有精确 SHA；普通 Mac builder 继续校验该资源，并将原字节纳入安装 ZIP、`INSTALL-SHA256.txt` 与 `package-source.json`。其他 `.mjs`、目录或外部 SDK 文件不因此获准入包，原 128 文件上限不变；无此资源的旧运行包仍可构建。
+
+此机制只携带自有适配器，不携带已购 Downloader/SDK、账号资料或 npm 依赖。依赖就绪、平台认证、来源预算、安装采用与实际媒体验收分别核验；构建包不启动下载或更新原机器。

@@ -97,7 +97,11 @@ def regular(path, executable=False):
 
 def plan(descriptor, helper, run=execute):
     value = json.loads(read(descriptor))
-    need(type(value) is dict and set(value) == {'schema', 'uv', 'uv_sha256', 'projects'})
+    need(type(value) is dict and set(value) in ({'schema', 'uv', 'uv_sha256', 'projects'}, {'schema', 'uv', 'uv_sha256', 'projects', 'downloader'}))
+    # Optional private media input must not recreate the original Pro/Signer env.
+    if 'downloader' in value:
+        need(type(value['downloader']) is dict)
+        value = {k:v for k,v in value.items() if k != 'downloader'}
     need(value['schema'] == SCHEMA and set(value['projects']) == {'pro', 'signer'})
     uv = regular(value['uv'], True)
     need(digest(uv.read_bytes()) == value['uv_sha256'], 'dependency_tool_changed')
