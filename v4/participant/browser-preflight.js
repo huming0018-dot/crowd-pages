@@ -102,6 +102,36 @@ function run(args) {
     if (info.NSFileOwnerAccountID !== home.NSFileOwnerAccountID || Number(info.NSFilePosixPermissions) !== 384 || Number(info.NSFileSize) > 16384) fail('browser_inventory_unavailable');
     return read(path);
   }
+  function referenceHash(path) {
+    // Fixed OS SHA tool, metadata files only; no shell, browser APIs or cookie reads.
+    var info = attributes(path), home = attributes(ObjC.unwrap($.NSHomeDirectory()));
+    if (info.NSFileType !== 'NSFileTypeRegular' || info.NSFileOwnerAccountID !== home.NSFileOwnerAccountID || Number(info.NSFileSize) > 16384) fail('browser_inventory_unavailable');
+    var task = $.NSTask.alloc.init, output = $.NSPipe.pipe;
+    task.launchPath = '/usr/bin/shasum'; task.arguments = ['-a', '256', path];
+    task.standardOutput = output; task.standardError = $.NSFileHandle.fileHandleWithNullDevice;
+    task.launch;
+    var bytes = output.fileHandleForReading.readDataToEndOfFile; task.waitUntilExit;
+    var value = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(bytes, $.NSUTF8StringEncoding));
+    if (task.terminationStatus !== 0 || typeof value !== 'string' || !/^[a-f0-9]{64}  /.test(value)) fail('browser_inventory_unavailable');
+    return value.substring(0, 64);
+  }
+  function originalBrowserData(session, sessionID) {
+    var link = session + '/browser_data', info = fileInfo(link);
+    if (!info || info.NSFileType !== 'NSFileTypeSymbolicLink') return link;
+    var markerPath = session + '/browser-profile-reference.json', markerInfo = attributes(markerPath), marker = privateMetadata(markerPath);
+    if (Number(markerInfo.NSFileSize) > 4096 || Object.keys(marker).sort().join(',') !== 'binding_sha256,browser_data,identity_sha256,platform,schema,session_id' ||
+        marker.schema !== 'crowd-pro-original-browser-profile-v1' || marker.session_id !== sessionID || marker.platform !== 'xhs' ||
+        typeof marker.browser_data !== 'string' || marker.browser_data[0] !== '/' || /[\x00-\x1f\x7f]/.test(marker.browser_data) ||
+        typeof marker.identity_sha256 !== 'string' || typeof marker.binding_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(marker.identity_sha256) || !/^[a-f0-9]{64}$/.test(marker.binding_sha256)) fail('browser_inventory_unavailable');
+    var original = marker.browser_data, parent = original.substring(0, original.lastIndexOf('/')), owner = attributes(ObjC.unwrap($.NSHomeDirectory())).NSFileOwnerAccountID;
+    if (normalize(original) !== original || ObjC.unwrap($(original).stringByResolvingSymlinksInPath) !== original ||
+        !original.endsWith('/sessions/' + sessionID + '/browser_data') || parent === session ||
+        ObjC.unwrap($(link).stringByResolvingSymlinksInPath) !== original || attributes(original).NSFileType !== 'NSFileTypeDirectory' || attributes(original).NSFileOwnerAccountID !== owner || attributes(parent).NSFileOwnerAccountID !== owner || info.NSFileOwnerAccountID !== owner) fail('browser_inventory_unavailable');
+    for (var i = 0, names = ['identity.json', 'pro-binding.json'], fields = ['identity_sha256', 'binding_sha256']; i < names.length; i++) {
+      if (referenceHash(session + '/' + names[i]) !== marker[fields[i]] || referenceHash(parent + '/' + names[i]) !== marker[fields[i]]) fail('browser_inventory_unavailable');
+    }
+    return original;
+  }
   try {
     if ((args.length !== 2 && args.length !== 4) || !args[0] || args[0][0] !== '/') fail('browser_inventory_unavailable');
     var root = normalize(args[0]), expected = args[1] ? normalize(args[1]) : '';
@@ -115,12 +145,14 @@ function run(args) {
         typeof settings.session_id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(settings.session_id) ||
         typeof settings.max_api_requests !== 'number' || Math.floor(settings.max_api_requests) !== settings.max_api_requests || settings.max_api_requests < 1 || settings.max_api_requests > 100 || settings.purpose !== 'noncommercial_research') fail('browser_inventory_unavailable');
     var session = settings.root + '/sessions/' + settings.session_id;
-    for (var i = 0, dirs = [settings.root, settings.root + '/sessions', session, session + '/browser_data']; i < dirs.length; i++) {
+    for (var i = 0, dirs = [settings.root, settings.root + '/sessions', session]; i < dirs.length; i++) {
       if (attributes(dirs[i]).NSFileType !== 'NSFileTypeDirectory') fail('browser_inventory_unavailable');
     }
     var identity = read(session + '/identity.json');
     if (Object.keys(identity).join(',') !== 'platform' || identity.platform !== 'xhs') fail('browser_inventory_unavailable');
-    var target = session + '/browser_data/xhs_bridge_profile';
+    var browserData = originalBrowserData(session, settings.session_id);
+    if (attributes(browserData).NSFileType !== 'NSFileTypeDirectory') fail('browser_inventory_unavailable');
+    var target = browserData + '/xhs_bridge_profile';
     if (scan(target, expected, false, true) !== 'compatible_registered') fail('browser_inventory_unavailable');
     if (target !== root) scan(root, expected, true, false);
     return 'compatible_registered';
