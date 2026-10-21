@@ -4,11 +4,12 @@ import argparse,hashlib,json,re,subprocess
 from pathlib import Path
 ASSETS={'SIGN-SOURCE-SHA.json','DEPENDENCIES.json','DEPENDENCY-SHA.json','NODE-SHA.json'}
 RESOURCES={'pro_xhs_download.mjs'}
+EXCLUDED={'probe_pro_ks_sdk.py'}  # Explicit offline SDK test, not an installed runtime entry.
 NATIVE={'participant_native_rpc.py','participant_pro_native.py'}
 def assemble(source,output,pins):
  source=Path(source).resolve();output=Path(output)
  raw=subprocess.check_output(['git','-C',str(source),'ls-files','--full-name','--',str(source)],text=True)
- names={Path(n).name for n in raw.splitlines() if Path(n).parent.name=='multiplatform' and ((n.endswith('.py') and not Path(n).name.startswith('test_')) or Path(n).name in ASSETS|RESOURCES)}|NATIVE
+ names={Path(n).name for n in raw.splitlines() if Path(n).parent.name=='multiplatform' and Path(n).name not in EXCLUDED and ((n.endswith('.py') and not Path(n).name.startswith('test_')) or Path(n).name in ASSETS|RESOURCES)}|NATIVE
  if not {'mc_runner.py','participant_pro.py','participant_pro_hooks.py'}<=names or not ASSETS<=names or not 1<=len(names)<=128:raise ValueError('own_runtime_manifest_invalid')
  expected=json.loads(Path(pins).read_bytes())
  if type(expected) is not dict or not NATIVE|{'mc_runner.py','participant_pro.py','participant_pro_hooks.py'} <= set(expected):raise ValueError('final_source_pins_required')
