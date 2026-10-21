@@ -1,6 +1,15 @@
 #!/bin/zsh
 set -eu
 umask 077
+# Explicit local operator capacity; no environment/native/remote task can set it.
+PRO_INSTALL_OPTIONS=()
+if (( $# )); then
+  if (( $# != 2 )) || [[ "$1" != --pro-max-api-requests ]] || [[ ! "$2" =~ '^([1-9][0-9]?|100)$' ]]; then
+    print '用法：开始安装.command [--pro-max-api-requests 1..100]；原设置未更改。'
+    exit 2
+  fi
+  PRO_INSTALL_OPTIONS=(--max-api-requests "$2")
+fi
 PACKAGE_DIR="${0:A:h}"
 INSTALL_DIR="$HOME/Library/Application Support/CrowdParticipantExtension"
 cd "$PACKAGE_DIR"
@@ -33,12 +42,17 @@ configure_pro_if_present() {
   local pro_dependencies="$pro_helper/pro-dependency-settings.json"
   if [[ -f "$pro_dependencies" && ! -L "$pro_dependencies" ]]; then
     print '正在按官方锁文件准备 Pro 和签名服务依赖；不下载私有 SDK、不启动采集。'
-    if /usr/bin/python3 -B "$PACKAGE_DIR/prepare-and-configure-pro.py" --descriptor "$pro_dependencies" --settings "$pro_settings" --runtime "$PACKAGE_DIR/pro-runtime" --helper-root "$pro_helper"; then
+    if /usr/bin/python3 -B "$PACKAGE_DIR/prepare-and-configure-pro.py" --descriptor "$pro_dependencies" --settings "$pro_settings" --runtime "$PACKAGE_DIR/pro-runtime" --helper-root "$pro_helper" "${PRO_INSTALL_OPTIONS[@]}"; then
       print 'Pro 依赖与原适配器已核验；平台登录仍由原账号核验。'
     else
       print 'Pro 依赖/签名服务/绑定尚未就绪，原设置与采集记录保持；请保留上方固定错误。'
+      if (( ${#PRO_INSTALL_OPTIONS} )); then return 1; fi
     fi
     return 0
+  fi
+  if (( ${#PRO_INSTALL_OPTIONS} )); then
+    print '明确的新额度需要原依赖描述文件与绑定接续事务；本次未更改原配置。'
+    return 1
   fi
   if [[ -f "$PACKAGE_DIR/configure-pro.py" && -f "$PACKAGE_DIR/pro-runtime/PRO-RUNTIME.json" && -f "$pro_settings" && ! -L "$pro_settings" ]]; then
     local pro_python

@@ -48,7 +48,8 @@ class Readiness(unittest.TestCase):
   deps=SimpleNamespace(prepare=lambda*a:self.prepared,read=lambda p:p.read_bytes(),plan=lambda*a:self.plan,
        check=lambda*a,health=None:(calls.append('check'),health()),need=B.need)
   tx=SimpleNamespace(signer_ready=lambda:calls.append('validate_only'),install=lambda config:(calls.append('install')or {'configured':True}))
-  W.install(deps,C.configure,None,self.settings,self.runtime,self.helper,lambda*a:tx)
+  descriptor=self.base/'readiness-descriptor.json';descriptor.write_text('{}')
+  W.install(deps,C.configure,descriptor,self.settings,self.runtime,self.helper,lambda*a:tx)
   self.assertEqual(calls,['check','validate_only','install'])
  def test_missing_signer_descriptor_refused_before_intent(self):
   v=json.loads((self.session/'pro-binding.json').read_bytes());v['sign_url']='http://127.0.0.1:8990';self.put(self.session/'pro-binding.json',v)

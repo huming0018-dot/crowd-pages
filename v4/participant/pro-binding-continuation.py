@@ -94,13 +94,16 @@ def signer_python_pin(path):
 
 
 class BindingContinuation:
-    def __init__(self, deps, prepared, plan, settings, runtime, helper):
+    def __init__(self, deps, prepared, plan, settings, runtime, helper, *, max_api_requests=None):
+        need(max_api_requests is None or type(max_api_requests) is int and 1 <= max_api_requests <= 100, 'operator_capacity_invalid')
+        self.operator_max_api_requests = max_api_requests
         self.deps, self.prepared, self.plan = deps, prepared, plan
         self.settings, self.runtime, self.helper = Path(settings), Path(runtime).resolve(), Path(helper)
         self.original_raw = read(self.settings); self.original = json.loads(self.original_raw)
         need(set(self.original) == {'python', 'root', 'mc_root', 'session_id', 'max_api_requests', 'purpose'})
         pro_source = plan['input']['projects']['pro']['root']  # mc_root remains the original MC fallback.
         self.values = {**self.original, 'python': prepared['python']}
+        if max_api_requests is not None: self.values['max_api_requests'] = max_api_requests
         self.root = Path(self.original['root']); self.session = self.root/'sessions'/self.original['session_id']
         self.executor = self.root/'pro-executor.json'; self.config = self.helper/'pro-config.json'
         self.executor_before = read(self.executor)
@@ -110,7 +113,13 @@ class BindingContinuation:
         if self.config_before is not None:
             old = json.loads(self.config_before)
             need(json.loads(self.executor_before).get('python') == old.get('python'), 'dependency_binding_source_changed')
-            need(set(old) == set(self.original)|{'schema', 'entry', 'entry_sha256'} and (all(type(old[k]) is type(v) and old[k] == v for k,v in self.original.items()) or all(type(old[k]) is type(v) and old[k] == v for k,v in self.values.items())), 'dependency_binding_scope_changed')
+            need(set(old) == set(self.original)|{'schema', 'entry', 'entry_sha256'}
+                 and all(type(old[k]) is type(v) and old[k] == v for k,v in self.original.items() if k not in {'python','max_api_requests'})
+                 and old['python'] in {self.original['python'],prepared['python']}
+                 and type(old['max_api_requests']) is int and 1 <= old['max_api_requests'] <= 100, 'dependency_binding_scope_changed')
+            # Installed capacity is durable current configuration, not an old task budget.
+            # Omitting a new operator override preserves it on every later upgrade.
+            if max_api_requests is None: self.values['max_api_requests'] = old['max_api_requests']
         manifest = json.loads((self.runtime/'PRO-RUNTIME.json').read_bytes())
         files = manifest['files']
         self.runtime_files = files
@@ -120,13 +129,13 @@ class BindingContinuation:
         key = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         entry = self.helper/'pro-runtime'/key/'participant_pro_native.py'
         self.expected = encoded({'schema': 'crowd-participant-pro-install-v1', **self.values, 'entry': str(entry), 'entry_sha256': files[entry.name]})
-        self.evidence = self.helper/'pro-binding-continuations'/sha(encoded({'input':prepared['key'],'runtime':key,'settings':sha(self.original_raw)}))
+        self.evidence = self.helper/'pro-binding-continuations'/sha(encoded({'input':prepared['key'],'runtime':key,'settings':sha(self.original_raw), **({'max_api_requests':self.values['max_api_requests']} if max_api_requests is not None or self.values['max_api_requests'] != self.original['max_api_requests'] else {})}))
         self.completed = (self.evidence/'RESULT.json').exists()
         self.derived = self.evidence/'derived-settings.json'
         self.lock = None
 
     def matches(self, existing):
-        return any(all(type(existing[k]) is type(v) and existing[k] == v for k,v in values.items()) for values in (self.original,self.values))
+        return (self.config_before is not None and existing == json.loads(self.config_before)) or any(all(type(existing[k]) is type(v) and existing[k] == v for k,v in values.items()) for values in (self.original,self.values))
 
     def scope(self):
         need(read(self.settings) == self.original_raw, 'dependency_binding_scope_changed')
@@ -248,7 +257,7 @@ class BindingContinuation:
             if self.completed:
                 need(read(self.executor) == self.executor_after and read(self.config) == self.expected, 'dependency_binding_cas_changed')
                 return self
-            once(self.evidence/'INTENT.json', encoded({'schema':'crowd-pro-binding-continuation-v1','input_key':self.prepared['key'],'before_settings_sha256':sha(self.original_raw),'executor_before_sha256':sha(self.executor_before),'executor_after_sha256':sha(self.executor_after),'config_before_sha256':sha(self.config_before) if self.config_before else None,'config_after_sha256':sha(self.expected),'scope':self.protected}))
+            once(self.evidence/'INTENT.json', encoded({'schema':'crowd-pro-binding-continuation-v1','input_key':self.prepared['key'],'before_settings_sha256':sha(self.original_raw),'executor_before_sha256':sha(self.executor_before),'executor_after_sha256':sha(self.executor_after),'config_before_sha256':sha(self.config_before) if self.config_before else None,'config_after_sha256':sha(self.expected),'scope':self.protected, **({'operator_max_api_requests':self.operator_max_api_requests} if self.operator_max_api_requests is not None else {})}))
             replace(self.executor, self.executor_before, self.executor_after)
             return self
         except BaseException:

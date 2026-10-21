@@ -6,4 +6,4 @@ if [[ ! -f "$PACKAGE_DIR/.crowd-support/install.command" ]]; then
   /usr/bin/osascript -e 'display alert "安装包不完整" message "请重新解压整个安装包，再双击里面的“开始安装.command”。不要单独移动这个文件。" as critical' || true
   exit 1
 fi
-exec "$PACKAGE_DIR/.crowd-support/install.command"
+exec "$PACKAGE_DIR/.crowd-support/install.command" "$@"

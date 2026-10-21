@@ -38,3 +38,9 @@ The original mc_root remains the MediaCrawler fallback. Selected Pro SDK source 
 运行包在既有 Python 与四个元数据文件之外，仅显式接收 `pro_xhs_download.mjs`。它必须在外部 source pins 与 `PRO-RUNTIME.json` 中有精确 SHA；普通 Mac builder 继续校验该资源，并将原字节纳入安装 ZIP、`INSTALL-SHA256.txt` 与 `package-source.json`。其他 `.mjs`、目录或外部 SDK 文件不因此获准入包，原 128 文件上限不变；无此资源的旧运行包仍可构建。
 
 此机制只携带自有适配器，不携带已购 Downloader/SDK、账号资料或 npm 依赖。依赖就绪、平台认证、来源预算、安装采用与实际媒体验收分别核验；构建包不启动下载或更新原机器。
+
+## Explicit new installation capacity
+
+The local operator may run the existing visible start command with `--pro-max-api-requests 60` (1..100). It forwards to `prepare-and-configure-pro.py --max-api-requests 60`. This explicitly sets the new configuration capacity, not old task budgets or identity. The original six fields include python/root/mc_root/session_id/max_api_requests/purpose; capacity is distinct from account identity. Original settings bytes remain unchanged. New capacity is bound to derived-settings, the unique INTENT key and the original pro-config transaction, with prior bytes, locks, CAS and rollback preserved. Later ordinary upgrades without an override preserve the validated installed capacity, even while immutable original settings retain14. An explicit future override may change only this capacity; all remaining identity/source fields still match the original settings. Missing descriptor, invalid capacity or verification failure rejects this capacity change.
+
+Only the own `pro_xhs_download.mjs` resource is newly accepted, with exact manifest SHA verification, no symlinks and copy verification. No arbitrary JS or private SDK is admitted. Helper does not embed installer continuation: existing package shell dynamically loads the Python files. Existing builder INSTALL-SHA/package-source cover these inputs; no helper or native-protocol rebuild is required.
