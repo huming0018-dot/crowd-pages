@@ -1,0 +1,34 @@
+{
+  "kind": "linux-wsl-machine-node",
+  "date": "2026-10-23",
+  "source_commit": "019b5bd38bad8a1a6903d7c2b5585071bab28346",
+  "source_overlays": {
+    "install-linux.py": "8b9e051a6f37b3adb1bb85642041f817c10d48f7f5a742a1c11c7f6a6a0434ea"
+  },
+  "base_archive_sha256": "31b2d6bb59724db7c30be067673bfc66ef4403a184eb136403f1dc897f4750e3",
+  "runtime_sha256": "63073aea928a3107a463c6150677738afb9de48628ecb6dcc1b600fb2024a20a",
+  "runtime_scope": "original G138133-file runtime entirely unchanged; installer-only delta, not complete current Git HEAD",
+  "archive": "crowd-linux-wsl-worker.tar.gz",
+  "archive_sha256": "cf3cf9f2719f9b7d2cae640a69bf8980b62fb762d64c1bc1377f4c455a8e2ecb",
+  "archive_bytes": 527652,
+  "files": 147,
+  "unchanged_files_from_base": 145,
+  "changed_files": [
+    "install-linux.py",
+    "PACKAGE-MANIFEST.json"
+  ],
+  "architecture": "Linux arm64/x86_64 original resource selection; no cache or binaries bundled",
+  "source_package_review_sha256": "dbdca9cdeb209241279c48030f045415737d8f9f18738bd4dcefba2e98888e0f",
+  "verified": "source regression and incremental package integrity only; x64 public cache SHA/ELF checked separately without execution",
+  "not_verified": [
+    "this package actual installation/source/cloud",
+    "Windows WSL2 installation/login/task/fault recovery",
+    "physical Linux",
+    "native Windows",
+    "cross-OS unattended OTA",
+    "fresh browser login"
+  ],
+  "private_sdk_or_credentials_included": false,
+  "ota_channel_changed": false,
+  "published": false
+}
