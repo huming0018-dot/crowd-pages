@@ -39,15 +39,16 @@ class ConfigureTests(unittest.TestCase):
   with self.assertRaises(ValueError):M.configure(self.runtime,self.settings,self.helper)
  def test_assemble_tracked_own_modules_plus_frozen_native(self):
   self.runtime.rename(self.root/'multiplatform');self.runtime=self.root/'multiplatform'
-  names={'participant_pro_native.py','participant_native_rpc.py','mc_runner.py','participant_pro.py','participant_pro_hooks.py'}|{f'own_{n}.py' for n in range(99)}
+  names={'participant_pro_native.py','participant_native_rpc.py','pro_source_artifact.py','mc_runner.py','participant_pro.py','participant_pro_hooks.py'}|{f'own_{n}.py' for n in range(99)}
   for name in names:(self.runtime/name).write_text('# own fixture\n')
-  for name in ('SIGN-SOURCE-SHA.json','DEPENDENCIES.json','DEPENDENCY-SHA.json','NODE-SHA.json'):(self.runtime/name).write_text('{}')
+  resources=('SIGN-SOURCE-SHA.json','DEPENDENCIES.json','DEPENDENCY-SHA.json','NODE-SHA.json','PRO-LOCAL-SOURCE-PINS.json')
+  for name in resources:(self.runtime/name).write_text('{}')
   subprocess.run(['git','init','-q',str(self.root)],check=True)
-  tracked=names-{'participant_pro_native.py','participant_native_rpc.py'}
-  subprocess.run(['git','-C',str(self.root),'add',*[str(self.runtime/n) for n in sorted(tracked)],*[str(self.runtime/n) for n in ('SIGN-SOURCE-SHA.json','DEPENDENCIES.json','DEPENDENCY-SHA.json','NODE-SHA.json')]],check=True)
+  tracked=names-{'participant_pro_native.py','participant_native_rpc.py','pro_source_artifact.py'}
+  subprocess.run(['git','-C',str(self.root),'add',*[str(self.runtime/n) for n in sorted(tracked)],*[str(self.runtime/n) for n in resources]],check=True)
   spec=importlib.util.spec_from_file_location('assemble_pro',Path(__file__).with_name('assemble-pro-runtime.py'));a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)
-  pins=self.root/'pins.json';pins.write_text(json.dumps({n:hashlib.sha256((self.runtime/n).read_bytes()).hexdigest() for n in ('participant_pro_native.py','participant_native_rpc.py','mc_runner.py','participant_pro.py','participant_pro_hooks.py')}))
-  self.assertEqual(a.assemble(self.runtime,self.root/'assembled',pins)['files'],108)
+  pins=self.root/'pins.json';pins.write_text(json.dumps({n:hashlib.sha256((self.runtime/n).read_bytes()).hexdigest() for n in ('participant_pro_native.py','participant_native_rpc.py','pro_source_artifact.py','mc_runner.py','participant_pro.py','participant_pro_hooks.py','PRO-LOCAL-SOURCE-PINS.json')}))
+  self.assertEqual(a.assemble(self.runtime,self.root/'assembled',pins)['files'],110)
   (self.runtime/'participant_pro_native.py').write_text('changed')
   with self.assertRaises(ValueError):a.assemble(self.runtime,self.root/'must-not-create',pins)
   self.assertFalse((self.root/'must-not-create').exists())
@@ -61,6 +62,17 @@ class ConfigureTests(unittest.TestCase):
   with self.assertRaises(ValueError):M.configure(self.runtime,self.settings,self.helper)
   self.man['files']={'../outside.py':'0'*64};(self.runtime/'PRO-RUNTIME.json').write_text(json.dumps(self.man))
   with self.assertRaises(ValueError):M.configure(self.runtime,self.settings,self.helper)
+ def test_complete_source_pin_resource_exact_name_and_original_hash_gate(self):
+  resource=self.runtime/'PRO-LOCAL-SOURCE-PINS.json';resource.write_text('{}')
+  self.man['files'][resource.name]=hashlib.sha256(resource.read_bytes()).hexdigest();(self.runtime/'PRO-RUNTIME.json').write_text(json.dumps(self.man))
+  try:r=M.configure(self.runtime,self.settings,self.helper)
+  except ValueError:self.fail('new own source-pin resource rejected by original configure boundary')
+  self.assertEqual(r['state'],'configured');config=self.helper/'pro-config.json';before=config.read_bytes()
+  resource.write_text('{"changed":true}')
+  with self.assertRaises(ValueError):M.configure(self.runtime,self.settings,self.helper)
+  resource.write_text('{}');other=self.runtime/'OTHER-SOURCE-PINS.json';other.write_text('{}');self.man['files'][other.name]=hashlib.sha256(other.read_bytes()).hexdigest();(self.runtime/'PRO-RUNTIME.json').write_text(json.dumps(self.man))
+  with self.assertRaises(ValueError):M.configure(self.runtime,self.settings,self.helper)
+  self.assertEqual(config.read_bytes(),before)
  def test_busy_unknown_deny(self):
   p=self.helper/'pro-state.json';p.write_text(json.dumps({'busy':True,'state':'unknown'}));p.chmod(0o600)
   with self.assertRaises(ValueError):M.configure(self.runtime,self.settings,self.helper)

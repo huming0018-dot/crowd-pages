@@ -40,13 +40,19 @@ configure_pro_if_present() {
   local pro_settings="$HOME/Library/Application Support/CrowdV4Updater/pro-install-settings.json"
   local pro_helper="$HOME/Library/Application Support/CrowdV4Updater"
   local pro_dependencies="$pro_helper/pro-dependency-settings.json"
-  if [[ -f "$pro_dependencies" && ! -L "$pro_dependencies" ]]; then
+  if [[ -f "$pro_dependencies" && ! -L "$pro_dependencies" ]] || [[ ! -e "$pro_settings" && ! -L "$pro_settings" && -f "$PACKAGE_DIR/pro-runtime/PRO-RUNTIME.json" ]]; then
     print '正在按官方锁文件准备 Pro 和签名服务依赖；不下载私有 SDK、不启动采集。'
-    if /usr/bin/python3 -B "$PACKAGE_DIR/prepare-and-configure-pro.py" --descriptor "$pro_dependencies" --settings "$pro_settings" --runtime "$PACKAGE_DIR/pro-runtime" --helper-root "$pro_helper" "${PRO_INSTALL_OPTIONS[@]}"; then
-      print 'Pro 依赖与原适配器已核验；平台登录仍由原账号核验。'
+    local pro_install_python
+    if ! pro_install_python="$(/bin/sh "$PACKAGE_DIR/bootstrap-pro-tools.command" --helper-root "$pro_helper" --python-path)"; then
+      print 'Pro 安装工具尚未准备完成；原安装与账号保留，当前不能开始采集。'
+      return 1
+    fi
+    if [[ "$pro_install_python" != /* || ! -x "$pro_install_python" ]]; then return 1; fi
+    if "$pro_install_python" -B "$PACKAGE_DIR/prepare-and-configure-pro.py" --descriptor "$pro_dependencies" --settings "$pro_settings" --runtime "$PACKAGE_DIR/pro-runtime" --helper-root "$pro_helper" "${PRO_INSTALL_OPTIONS[@]}"; then
+      print 'Pro 依赖准备步骤完成；本机登录和账号绑定仍须就绪后才能开始采集。'
     else
       print 'Pro 依赖/签名服务/绑定尚未就绪，原设置与采集记录保持；请保留上方固定错误。'
-      if (( ${#PRO_INSTALL_OPTIONS} )); then return 1; fi
+      return 1
     fi
     return 0
   fi
@@ -130,6 +136,8 @@ fi
 if [[ -f "$HOME/Library/Application Support/CrowdV4LocalTestUpdater/config.json" ]]; then
   print '检测到私人测试版：保留原样。以下另装标准参与者版，不迁移私人版的身份或队列。'
 fi
+# Fresh dependencies finish before an extension directory or Native host is registered.
+configure_pro_if_present
 print '[2/3] 准备标准参与者安装，保留现有浏览器资料…'
 /bin/mkdir -p "$HOME/Library/Application Support"
 /bin/mkdir -m 700 "$INSTALL_DIR"
@@ -141,7 +149,6 @@ if ! ./crowd-v4-participant-updater --install "$INSTALL_DIR" 'Google Chrome'; th
   fail busy '系统未能完成助手安装。请保留终端错误并联系邀请人；不要删除原扩展或关闭系统保护。'
 fi
 /bin/rm -- "$INSTALL_DIR/.crowd-install-owner"
-configure_pro_if_present
 INSTALL_SUCCESS=true
 print '[3/3] 安装文件已准备完成。Chrome 的加载确认需要你本人完成。'
 print -r -- "$INSTALL_DIR" | /usr/bin/pbcopy || true

@@ -25,7 +25,7 @@ def configure(runtime,settings,helper,continuation=None):
  manifest=json.loads((runtime/'PRO-RUNTIME.json').read_bytes());need(manifest.get('schema')=='crowd-participant-pro-runtime-v1' and set(manifest)=={'schema','files'})
  files=manifest['files'];need(type(files) is dict and 'participant_pro_native.py' in files and len(files)<=128)
  for name,h in files.items():
-  need(type(name) is str and '/' not in name and ((name.endswith('.py') and not name.startswith('test_')) or name in {'SIGN-SOURCE-SHA.json','DEPENDENCIES.json','DEPENDENCY-SHA.json','NODE-SHA.json','pro_xhs_download.mjs'}))
+  need(type(name) is str and '/' not in name and ((name.endswith('.py') and not name.startswith('test_')) or name in {'SIGN-SOURCE-SHA.json','DEPENDENCIES.json','DEPENDENCY-SHA.json','NODE-SHA.json','PRO-LOCAL-SOURCE-PINS.json','pro_xhs_download.mjs'}))
   p=runtime/name;need(not p.is_symlink() and p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest()==h)
  fingerprint=hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
  lock=os.open(helper/'update.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)

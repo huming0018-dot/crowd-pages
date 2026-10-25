@@ -17,6 +17,10 @@ def install(deps, configure, descriptor, settings, runtime, helper, continuation
     deps.need(max_api_requests is None or type(max_api_requests) is int and 1 <= max_api_requests <= 100, 'operator_capacity_invalid')
     # Dependency work does not modify settings, SDK files, account data or adapter pointers.
     prepared = deps.prepare(descriptor, helper)
+    if not Path(settings).exists() and not Path(settings).is_symlink():
+        deps.need(max_api_requests is None, 'operator_capacity_requires_continuation')
+        return {**prepared, 'state': 'prepared_unbound', 'configured': False,
+                'authenticated': False, 'local_account_binding_required': True}
     values = json.loads(deps.read(settings))
     plan = deps.plan(descriptor, helper)
     if continuation_factory is not None:
@@ -48,10 +52,16 @@ def main():
     base = Path(__file__).resolve().parent
     deps = load('pro_dependencies', base / 'prepare-pro-dependencies.py')
     try:
+        if not args.descriptor.exists() and not args.descriptor.is_symlink():
+            deps.need(args.descriptor == args.helper_root/'pro-dependency-settings.json', 'dependency_input_invalid')
+            args.descriptor = deps.discover(args.helper_root)
         original = load('pro_configure', base / 'configure-pro.py')
         continuation = load('pro_binding_continuation', base / 'pro-binding-continuation.py')
         result = install(deps, original.configure, args.descriptor, args.settings, args.runtime, args.helper_root, continuation.BindingContinuation, max_api_requests=args.max_api_requests)
-        print(json.dumps(result)); return 0
+        print(json.dumps(result))
+        if result.get('state') == 'prepared_unbound':
+            print('Pro 依赖已准备；尚未绑定本机登录，当前不能采集。', file=sys.stderr)
+        return 0
     except FileNotFoundError:
         print(json.dumps({'state': 'not_ready', 'error': 'dependency_binding_required'})); return 1
     except Exception as error:

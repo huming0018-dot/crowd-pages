@@ -7,6 +7,7 @@ The installer hands a verified result to the existing configure-pro boundary.
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,25 @@ SCHEMA = 'crowd-pro-dependency-input-v1'
 PROJECT_KEYS = {'root', 'commit', 'files', 'python', 'python_sha256'}
 FILES = {'pyproject.toml', 'uv.lock', 'LICENSE', 'README.md'}
 PROTOCOL = 'vox-acquisition-v1'
+# Existing reviewed local source/tool pins; discovery never accepts an arbitrary
+# executable or uses a repository's current HEAD as its own trust anchor.
+LOCAL_TOOL_PINS = {
+    'uv': '55936a60bff5de7ac04facb72f9e6fd0ffd9661063480224c3ab321c3f10caff',
+    'pro': 'e8896fef4a5276e345824169c6749f8eee83e4206ee7e0da204bfb00308e1514',
+    'signer': 'ac60cfe0268614638d0ffa35f3b0284fc7b3a11482723793455e17eeb278509e',
+}
+LOCAL_SOURCE_PINS = {
+    'pro': {'commit': 'd32dd565277116ba4880c28ccd417a7c376cb62d', 'files': {
+        'LICENSE': '47203c1487b2bc27d7aea346a921b99538aee807c066361e8a266c080ec5dd1c',
+        'README.md': 'b3125a51fb2bd6ba26bf6c83ae682fefb7fc86ec9cd2b850c4c5e3b2a697c8af',
+        'pyproject.toml': 'a028a5ad2b4d30ddfc714f75cd53e8bdd74e3f09a578d19b26668512e88dc1e1',
+        'uv.lock': '88323f6cfff8a199fa801c9eb2d60dd6a1d995da67f42e3015d62600cdb3ac37'}},
+    'signer': {'commit': '26c53d8f3221d95e0d4961b0593debd179d3cf10', 'files': {
+        'LICENSE': '47203c1487b2bc27d7aea346a921b99538aee807c066361e8a266c080ec5dd1c',
+        'README.md': 'b533f787186fd7ce90d1676419d2e56f437b5b9ae8c246bef1631dae64322ab8',
+        'pyproject.toml': '7ce093892b7ff61787daae1faa65c9cdabc19802a2f2e760bd5d3a56cde19f97',
+        'uv.lock': 'b08a6f668a5c7177bef0b81346e20e9adf5929b082d7ff67b8565d0ebf6500a0'}},
+}
 
 
 def need(ok, reason='dependency_input_invalid'):
@@ -83,7 +103,8 @@ def execute(argv, *, env, cwd, timeout=600):
 def environment():
     return {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': str(Path.home()),
             'PYTHONDONTWRITEBYTECODE': '1', 'UV_NO_PROGRESS': '1',
-            'UV_PYTHON_DOWNLOADS': 'never', 'UV_KEYRING_PROVIDER': 'disabled'}
+            'UV_PYTHON_DOWNLOADS': 'never', 'UV_KEYRING_PROVIDER': 'disabled',
+            'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0'}
 
 
 def regular(path, executable=False):
@@ -93,6 +114,124 @@ def regular(path, executable=False):
     if executable:
         need(os.access(path, os.X_OK))
     return path
+
+
+def local_candidates(home, helper):
+    homes = [home, home/'MediaCrawlerPro', home/'mediacrawler-pro', home/'Downloads', home/'Desktop']
+    return {
+        'pro': [helper/'private-layout/sdk'] + [p/'MediaCrawlerPro-Python' for p in homes],
+        'signer': [helper/'private-layout/sign'] + [p/'MediaCrawlerPro-SignSrv' for p in homes],
+        'uv': [home/'.local/bin/uv', home/'.cargo/bin/uv'],
+        'pro_python': [home/'.local/share/uv/python/cpython-3.11.16-macos-aarch64-none/bin/python3.11'],
+        'signer_python': [home/'.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/bin/python3.12'],
+    }
+
+
+def source_artifact():
+    runtime = Path(__file__).with_name('pro-runtime')
+    path = runtime/'pro_source_artifact.py'
+    try: metadata = json.loads((runtime/'PRO-RUNTIME.json').read_bytes())
+    except (OSError, ValueError): raise ValueError('pro_artifact_manifest_changed') from None
+    need(metadata.get('schema') == 'crowd-participant-pro-runtime-v1' and
+         digest(regular(path).read_bytes()) == metadata.get('files', {}).get(path.name),
+         'pro_artifact_manifest_changed')
+    spec = importlib.util.spec_from_file_location('installer_pro_source_artifact', path)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return module
+
+
+def git_argv(source, *args):
+    return ['/usr/bin/git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-C', str(source), *args]
+
+
+def git_source(source, commit, run):
+    actual = run(git_argv(source, 'rev-parse', 'HEAD'), env=environment(), cwd=source, timeout=10).decode().strip()
+    need(actual == commit, 'dependency_source_changed')
+    dirty = run(git_argv(source, 'status', '--porcelain', '--untracked-files=normal'),
+                env=environment(), cwd=source, timeout=10)
+    need(not dirty, 'dependency_source_changed')
+
+
+def bootstrap_tools(helper, run=execute):
+    record = Path(helper)/'bootstrap-tools/TOOLS.json'
+    if not record.exists() and not record.is_symlink():
+        return None
+    need(record.parent.resolve() == record.parent and record.parent.stat().st_uid == os.getuid() and
+         not record.parent.stat().st_mode & 0o077, 'dependency_bootstrap_unavailable')
+    before = read(record)
+    script = regular(Path(__file__).with_name('bootstrap-pro-tools.command'))
+    try:
+        checked = run(['/bin/sh', str(script), '--helper-root', str(helper), '--check', '--python-path'],
+                      env=environment(), cwd=script.parent, timeout=60).decode().strip()
+    except (ValueError, OSError):
+        raise ValueError('dependency_bootstrap_unavailable') from None
+    need(read(record) == before, 'dependency_bootstrap_changed')
+    value = json.loads(before)
+    need(set(value) == {'schema', 'arch', 'uv', 'pro_python', 'signer_python'} and
+         value['schema'] == 'crowd-pro-bootstrap-tools-v1' and value['arch'] in ('arm64', 'x64'),
+         'dependency_bootstrap_changed')
+    tools = {}
+    for role, version in [('uv', '0.12.7'), ('pro_python', '3.11.16'), ('signer_python', '3.12.14')]:
+        item = value[role]
+        need(type(item) is dict and set(item) == {'path', 'sha256', 'version'} and item['version'] == version,
+             'dependency_bootstrap_changed')
+        path = regular(Path(item['path']), True)
+        need(digest(path.read_bytes()) == item['sha256'], 'dependency_bootstrap_changed')
+        tools[role] = path
+    need(checked == str(tools['signer_python']), 'dependency_bootstrap_changed')
+    return tools
+
+
+def discover(helper, *, home=None, run=execute):
+    helper = Path(helper); home = Path(home) if home is not None else Path.home()
+    need(helper.is_absolute() and helper.resolve() == helper, 'dependency_target_invalid')
+    helper.mkdir(mode=0o700, parents=True, exist_ok=True)
+    need(helper.stat().st_uid == os.getuid() and not helper.stat().st_mode & 0o077,
+         'dependency_target_invalid')
+    descriptor = helper/'pro-dependency-settings.json'
+    if descriptor.exists() or descriptor.is_symlink():
+        read(descriptor)
+        return descriptor
+    candidates = local_candidates(home, helper)
+    sources = {}
+    for role in ('pro', 'signer'):
+        frozen = helper/'pro-licensed-artifacts'/(role+'-'+LOCAL_SOURCE_PINS[role]['commit'])
+        if frozen.exists() or frozen.is_symlink():
+            sources[role] = frozen
+            continue
+        found = {p for p in candidates[role] if p.is_dir()}
+        need(len(found) == 1, 'dependency_%s_missing_or_ambiguous' % role)
+        source = found.pop()
+        need(source.resolve() == source, 'dependency_source_changed')
+        sources[role] = source
+    tools = bootstrap_tools(helper, run)
+    if tools is None:
+        tools = {}
+        for name, role in (('uv', 'uv'), ('pro_python', 'pro'), ('signer_python', 'signer')):
+            found = set()
+            for candidate in candidates[name]:
+                if candidate.is_file() and not candidate.is_symlink():
+                    path = regular(candidate, True)
+                    if digest(path.read_bytes()) == LOCAL_TOOL_PINS[role]:
+                        found.add(path)
+            need(len(found) == 1, 'dependency_%s_unavailable' % name)
+            tools[name] = found.pop()
+    value = {'schema': SCHEMA, 'uv': str(tools['uv']),
+             'uv_sha256': digest(tools['uv'].read_bytes()), 'projects': {}}
+    for role, source in sources.items():
+        pin = LOCAL_SOURCE_PINS[role]
+        # Copy only trusted factory files; never execute or copy Git/account data.
+        frozen = helper/'pro-licensed-artifacts'/(role+'-'+pin['commit'])
+        verified = source_artifact().materialize(source, frozen, role)
+        need(verified['commit'] == pin['commit'], 'dependency_source_changed')
+        value['projects'][role] = {**pin, 'root': str(frozen),
+            'python': str(tools[role+'_python']), 'python_sha256': digest(tools[role+'_python'].read_bytes())}
+        value['projects'][role]['source_kind'] = 'frozen_artifact'
+    try:
+        write_once(descriptor, value)
+    except FileExistsError:
+        need(read(descriptor) == encode(value), 'dependency_input_changed')
+    return descriptor
 
 
 def plan(descriptor, helper, run=execute):
@@ -110,14 +249,17 @@ def plan(descriptor, helper, run=execute):
     need(helper.stat().st_uid == os.getuid() and not helper.stat().st_mode & 0o077)
     env = environment()
     for name, project in value['projects'].items():
-        need(type(project) is dict and set(project) == PROJECT_KEYS)
+        need(type(project) is dict and set(project) in (PROJECT_KEYS, PROJECT_KEYS|{'source_kind'}))
         source = Path(project['root'])
         need(source.is_absolute() and source.resolve() == source and source.is_dir())
         need(re.fullmatch('[a-f0-9]{40}', project['commit']) is not None)
-        commit = run(['/usr/bin/git', '-C', str(source), 'rev-parse', 'HEAD'], env=env, cwd=source, timeout=10).decode().strip()
-        need(commit == project['commit'], 'dependency_source_changed')
-        dirty = run(['/usr/bin/git', '-C', str(source), 'status', '--porcelain', '--untracked-files=normal'], env=env, cwd=source, timeout=10)
-        need(not dirty, 'dependency_source_changed')
+        if 'source_kind' in project:
+            need(project['source_kind'] == 'frozen_artifact' and not (source/'.git').exists() and
+                 not (source/'.git').is_symlink(), 'dependency_source_changed')
+            verified = source_artifact().verify(source, name)
+            need(verified['commit'] == project['commit'], 'dependency_source_changed')
+        else:
+            git_source(source, project['commit'], run)
         need(type(project['files']) is dict and set(project['files']) == FILES)
         for filename, expected in project['files'].items():
             path = regular(source / filename)

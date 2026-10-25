@@ -25,6 +25,15 @@ builder = load('own_resource_builder', BASE/'build_participant.py')
 
 
 class Resources(unittest.TestCase):
+    def test_complete_source_manifest_and_verifier_are_required_runtime_inputs(self):
+        self.assertIn('PRO-LOCAL-SOURCE-PINS.json', assembler.ASSETS)
+        self.assertIn('pro_source_artifact.py', assembler.NATIVE)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); source, pinfile, pins = self.source(root)
+            pins.pop('PRO-LOCAL-SOURCE-PINS.json'); pinfile.write_text(json.dumps(pins))
+            with self.assertRaisesRegex(ValueError, 'resource_pin_required'):
+                assembler.assemble(source, root/'runtime', pinfile)
+
     def source(self, root, resource=True):
         source = root/'repo/multiplatform'
         source.mkdir(parents=True)

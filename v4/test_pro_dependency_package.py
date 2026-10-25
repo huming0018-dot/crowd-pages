@@ -30,13 +30,20 @@ class Builder(unittest.TestCase):
             helper=root/'helper';shutil.copyfile(helper_input,helper);helper.chmod(0o700)
             runtime=root/'runtime';runtime.mkdir();(runtime/'participant_pro_native.py').write_bytes(b'fixture own adapter')
             (runtime/'portable_node.py').write_bytes((BASE/'participant/portable_node.py').read_bytes())
-            (runtime/'PRO-RUNTIME.json').write_text(json.dumps({'schema':'crowd-participant-pro-runtime-v1','files':{name:hashlib.sha256((runtime/name).read_bytes()).hexdigest() for name in ('participant_pro_native.py','portable_node.py')}}))
+            pins = BASE.parent.parent/'crowd-kol/server/crowd/v4/multiplatform/PRO-LOCAL-SOURCE-PINS.json'
+            (runtime/'PRO-LOCAL-SOURCE-PINS.json').write_bytes(pins.read_bytes())
+            (runtime/'PRO-RUNTIME.json').write_text(json.dumps({'schema':'crowd-participant-pro-runtime-v1','files':{name:hashlib.sha256((runtime/name).read_bytes()).hexdigest() for name in ('participant_pro_native.py','portable_node.py','PRO-LOCAL-SOURCE-PINS.json')}}))
             output=root/'installer.zip';module.build(ext,helper,output,runtime)
             with zipfile.ZipFile(output) as archive:
-                for name in ['prepare-pro-dependencies.py','prepare-and-configure-pro.py']:
+                for name in ['bootstrap-pro-tools.command','prepare-pro-dependencies.py','prepare-and-configure-pro.py']:
                     key='.crowd-support/'+name
                     self.assertEqual(archive.read(key),(BASE/'participant'/name).read_bytes())
                     self.assertIn(name,archive.read('.crowd-support/INSTALL-SHA256.txt').decode())
+                self.assertEqual(archive.read('.crowd-support/PRO-LOCAL-SOURCE-PINS.json'),pins.read_bytes())
+                self.assertEqual(archive.read('.crowd-support/pro-runtime/PRO-LOCAL-SOURCE-PINS.json'),pins.read_bytes())
+                provenance=json.loads(archive.read('.crowd-support/package-source.json'))
+                self.assertEqual(provenance['source_sha256']['participant/bootstrap-pro-tools.command'],hashlib.sha256((BASE/'participant/bootstrap-pro-tools.command').read_bytes()).hexdigest())
+                self.assertEqual(provenance['pro_runtime_files']['PRO-LOCAL-SOURCE-PINS.json'],hashlib.sha256(pins.read_bytes()).hexdigest())
                 self.assertFalse(any('uv.lock' in n or 'pyvenv.cfg' in n or 'browser_data' in n for n in archive.namelist()))
 
 
