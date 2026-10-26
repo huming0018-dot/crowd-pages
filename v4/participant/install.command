@@ -11,6 +11,7 @@ if (( $# )); then
   PRO_INSTALL_OPTIONS=(--max-api-requests "$2")
 fi
 PACKAGE_DIR="${0:A:h}"
+PACKAGE_NATIVE_PROTOCOL='@NATIVE_PROTOCOL@'
 INSTALL_DIR="$HOME/Library/Application Support/CrowdParticipantExtension"
 cd "$PACKAGE_DIR"
 INSTALL_NONCE="$$-$RANDOM-$RANDOM"
@@ -128,6 +129,9 @@ case "$BROWSER_CHECK" in
   browser_reconnect_required) fail browser-existing 'Chrome 中已有同一参与者插件，但与当前更新助手的目录不一致。为保留原身份，本次不覆盖；请联系邀请人核对。' ;;
   *) fail browser-unknown '暂时无法确认 Chrome 原插件的安装情况。为保护原身份，本次没有安装或接续；请把此提示交给邀请人。' ;;
 esac
+if [[ "$PACKAGE_NATIVE_PROTOCOL" != participant_pro_v2 && -n "$ORIGINAL_DIR" && ( -e "$ORIGINAL_DIR/src/participant-pro.js" || -L "$ORIGINAL_DIR/src/participant-pro.js" ) ]]; then
+  fail incompatible '检测到原参与者是 Pro 客户端。基础包不会替换其 Native helper；原安装已保留，请使用对应 Pro 接续包。'
+fi
 if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
   print '[2/3] 找到原标准安装，正在接续；不会重新注册或覆盖采集身份。'
   if [[ -z "$ORIGINAL_DIR" || ! -d "$ORIGINAL_DIR" ]]; then

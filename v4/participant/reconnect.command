@@ -1,6 +1,7 @@
 #!/bin/zsh
 set -eu
 PACKAGE_DIR="${0:A:h}"
+PACKAGE_NATIVE_PROTOCOL='@NATIVE_PROTOCOL@'
 cd "$PACKAGE_DIR"
 /usr/bin/shasum -a 256 -c MIGRATE-SHA256.txt
 if [[ ! -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
@@ -8,6 +9,11 @@ if [[ ! -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; th
   exit 1
 fi
 ORIGINAL_DIR="$(/usr/bin/plutil -extract directory raw -expect string -o - "$HOME/Library/Application Support/CrowdV4Updater/config.json" 2>/dev/null || true)"
+# The builder pins helper capability even when this reconnect ZIP omits runtime.
+if [[ "$PACKAGE_NATIVE_PROTOCOL" != participant_pro_v2 && -n "$ORIGINAL_DIR" && ( -e "$ORIGINAL_DIR/src/participant-pro.js" || -L "$ORIGINAL_DIR/src/participant-pro.js" ) ]]; then
+  print '检测到原参与者是 Pro 客户端；基础包不会替换其 Native helper。本次没有接续，请使用对应 Pro 接续包。'
+  exit 1
+fi
 BROWSER_CHECK="$("$PACKAGE_DIR/browser-preflight.command" "$ORIGINAL_DIR" 2>/dev/null || true)"
 if [[ "$BROWSER_CHECK" != clear && "$BROWSER_CHECK" != compatible_registered ]]; then
   print 'Chrome 原插件与标准更新路径尚未核对。本次没有接续；请保留旧插件、身份和任务，把提示交给邀请人。'

@@ -67,12 +67,16 @@ def build(extension, helper, output, pro_runtime=None):
         subprocess.run([str(helper), '--check-install', str(directory)], check=True, capture_output=True)
     archive_name = f'crowd-v{version}-participant-extension.zip'
     helper_name = 'crowd-v4-participant-updater'
+    helper_bytes = helper.read_bytes()
+    # Reconnect ZIPs omit runtime; capability belongs to their checksum-pinned helper.
+    supports_pro = all(verb in helper_bytes for verb in (b'pro_hello', b'pro_start', b'pro_status', b'pro_stop'))
+    native_protocol = 'participant_pro_v2' if supports_pro else 'ota_only'
     extension_key = json.loads(files['manifest.json']).get('key', '')
     if not re.fullmatch(r'[A-Za-z0-9+/=]+', extension_key):
         raise ValueError('participant manifest key required')
     base = {
-        helper_name: helper.read_bytes(),
-        'reconnect.command': (ROOT / 'participant/reconnect.command').read_bytes(),
+        helper_name: helper_bytes,
+        'reconnect.command': (ROOT / 'participant/reconnect.command').read_text().replace('@NATIVE_PROTOCOL@', native_protocol).encode(),
         'browser-preflight.command': (ROOT / 'participant/browser-preflight.command').read_bytes(),
         'MIGRATION-README.md': (ROOT / 'participant/MIGRATION-README.md').read_bytes(),
         'browser-preflight.js': (ROOT / 'participant/browser-preflight.js').read_text().replace('@EXTENSION_KEY@', extension_key).encode(),
@@ -102,7 +106,7 @@ def build(extension, helper, output, pro_runtime=None):
             pro_files[name] = (ROOT / 'participant' / name).read_bytes()
     base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command')).encode()
     install = {**base, **pro_files, archive_name: extension.read_bytes()}
-    install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).encode()
+    install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).replace('@NATIVE_PROTOCOL@', native_protocol).encode()
     install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command', 'install.command', *sorted(pro_files))).encode()
     guide = (ROOT / 'participant/安装说明.html').read_text().replace('@VERSION@', version)
     errors = {
@@ -134,7 +138,7 @@ def build(extension, helper, output, pro_runtime=None):
         "else /usr/bin/open \"$PACKAGE_DIR/help.html\" || true; exit 1; fi\n").encode()
     source_files = ['build_participant.py', 'participant/install.command', 'participant/browser-preflight.js', 'participant/browser-preflight.command', 'participant/reconnect.command',
                     'participant/configure-pro.py', 'participant/bootstrap-pro-tools.command', 'participant/prepare-pro-dependencies.py', 'participant/prepare-and-configure-pro.py', 'participant/prepare-pro-downloader.py', 'participant/pro-binding-continuation.py', 'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
-    provenance = {'package_revision': 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()),
+    provenance = {'package_revision': 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()), 'native_protocol': native_protocol,
                   'helper_sha256': digest(helper.read_bytes()), 'pro_runtime_files': {name: digest(data) for name, data in pro_files.items()},
                   'source_sha256': {name: digest((ROOT / name).read_bytes()) for name in source_files}}
     install['package-source.json'] = (json.dumps(provenance, ensure_ascii=False, indent=2) + '\n').encode()

@@ -5,7 +5,7 @@ import argparse,hashlib,json,os,re,subprocess,sys,tempfile,zipfile,time
 from pathlib import Path
 ROOT=Path(__file__).parent;KEY='dGVzdA==';ID='licijehcpohikchlnkbpjdjdfkcocndg'
 def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
-def case(mode,package=None,reconnect_package=False):
+def case(mode,package=None,reconnect_package=False,pro_package=False,runtime_payload=False):
  with tempfile.TemporaryDirectory(prefix='participant-chain-',dir=Path.home()) as tmp:
   b=Path(tmp).resolve();home=b/'home';support=b/'package/.crowd-support';support.mkdir(parents=True);tools=b/'tools';tools.mkdir();calls=b/'helper-calls';opens=b/'ui-calls'
   scripts=['install.command','reconnect.command','browser-preflight.js','browser-preflight.command']
@@ -43,6 +43,12 @@ def case(mode,package=None,reconnect_package=False):
   register(daily,legacy);register(target,source)
   if mode=='missing_target':(target/'Default/Secure Preferences').write_text('{}')
   if mode=='native_conflict':(legacy/'manifest.json').write_text(json.dumps({'version':'3.5.3','key':KEY,'permissions':['nativeMessaging']}))
+  if mode=='pro_existing':
+   (source/'src').mkdir()
+   (source/'src/participant-pro.js').write_text('// Pro capability marker; base package must not replace this install.\n')
+   if (pro_package or runtime_payload) and not reconnect_package:
+    rt=support/'pro-runtime';rt.mkdir();(rt/'PRO-RUNTIME.json').write_text('{}')
+    (support/'configure-pro.py').write_text('# own dependency transport stub: no configuration writes\n')
   if mode=='poll_lock':
    # Real current helper holds update.lock through bootstrap; scheduled poll may
    # acquire it immediately after install returns and before outer configure.
@@ -59,13 +65,19 @@ def case(mode,package=None,reconnect_package=False):
   (support/'MIGRATE-SHA256.txt').write_text(''.join(digest(support/n)+'  '+n+'\n' for n in ['crowd-v4-participant-updater','browser-preflight.js','reconnect.command']+(['browser-preflight.command'] if (support/'browser-preflight.command').exists() else [])))
   (support/'INSTALL-SHA256.txt').write_text(''.join(digest(f)+'  '+f.name+'\n' for f in support.iterdir() if f.is_file() and f.name not in ('MIGRATE-SHA256.txt','INSTALL-SHA256.txt')))
   entry=b/'package/开始安装.command';entry.write_bytes((ROOT/'participant/start.command').read_bytes());entry.chmod(0o755)
-  protected=[source/'manifest.json',helperhome/'config.json',daily/'Default/Secure Preferences',target/'Default/Secure Preferences',session/'identity.json',legacy/'manifest.json'];before={str(f):digest(f) for f in protected}
+  # Offline identity/queue/UNKNOWN/ACK sentinels must survive either branch.
+  for name,data in {'crowd-v4-updater':'original helper sentinel','state.json':'{"status":"applied","ack":"original-ack"}','outbox.json':'{"UNKNOWN":"original-task","queue":["receipt"]}'}.items():
+   (helperhome/name).write_text(data)
+  protected=[source/'manifest.json',helperhome/'config.json',daily/'Default/Secure Preferences',target/'Default/Secure Preferences',session/'identity.json',legacy/'manifest.json',helperhome/'crowd-v4-updater',helperhome/'state.json',helperhome/'outbox.json',settings]
+  before={str(f):(digest(f),f.stat().st_mtime_ns) for f in protected}
   env={**os.environ,'HOME':str(home),'HELPER_CALLS':str(calls),'UI_CALLS':str(opens),'POLL_SCRIPT':str(b/'poll.py'),'POLL_READY':str(b/'poll-ready')}
   p=subprocess.run(['/bin/zsh',str(entry)],env=env,capture_output=True,text=True,timeout=30)
   actual=calls.read_text().splitlines() if calls.exists() else []
-  expected=(['--reconnect'] if reconnect_package else ['--check-install','--reconnect']) if mode in ('success','poll_lock') else []
-  assert p.returncode==(0 if mode in ('success','poll_lock') else 1) and actual==expected,(mode,p.returncode,actual,p.stdout,p.stderr)
-  assert {str(f):digest(f) for f in protected}==before
+  succeeds=mode in ('success','poll_lock') or (mode=='pro_existing' and pro_package)
+  expected=(['--reconnect'] if reconnect_package else ['--check-install','--reconnect']) if succeeds else []
+  print(json.dumps({'mode':mode,'pro_package':pro_package,'reconnect_package':reconnect_package,'entry_exit':p.returncode,'helper_calls':actual,'stdout':p.stdout,'stderr':p.stderr}),flush=True)
+  assert p.returncode==(0 if succeeds else 1) and actual==expected,(mode,p.returncode,actual,p.stdout,p.stderr)
+  assert {str(f):(digest(f),f.stat().st_mtime_ns) for f in protected}==before
   if mode=='poll_lock':
    config=helperhome/'pro-config.json'
    assert config.exists(),('self-created RunAtLoad poll lock prevented own-runtime configuration',p.stdout,p.stderr)
@@ -77,9 +89,10 @@ def case(mode,package=None,reconnect_package=False):
   if calls.exists():calls.unlink()
   p=subprocess.run(['/bin/zsh',str(support/'reconnect.command')],env=env,capture_output=True,text=True,timeout=30)
   actual=calls.read_text().splitlines() if calls.exists() else []
-  assert p.returncode==(0 if mode in ('success','poll_lock') else 1) and actual==(['--reconnect'] if mode in ('success','poll_lock') else []),(mode,'standalone',actual,p.stdout,p.stderr)
-  assert {str(f):digest(f) for f in protected}==before
+  print(json.dumps({'mode':mode,'standalone':True,'pro_package':pro_package,'entry_exit':p.returncode,'helper_calls':actual,'stdout':p.stdout,'stderr':p.stderr}),flush=True)
+  assert p.returncode==(0 if succeeds else 1) and actual==(['--reconnect'] if succeeds else []),(mode,'standalone',actual,p.stdout,p.stderr)
+  assert {str(f):(digest(f),f.stat().st_mtime_ns) for f in protected}==before
   print('PASS actual nested install + standalone reconnect',mode,'exact helper calls',expected)
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('--package',type=Path);p.add_argument('--reconnect-package',action='store_true');p.add_argument('--lock-race',action='store_true');a=p.parse_args()
- for mode in (['poll_lock'] if a.lock_race else ['success','missing_target','native_conflict']):case(mode,a.package,a.reconnect_package)
+ for mode in (['poll_lock'] if a.lock_race else ['success','missing_target','native_conflict','pro_existing']):case(mode,a.package,a.reconnect_package)
