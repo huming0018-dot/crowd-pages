@@ -1,0 +1,39 @@
+{
+  "schema": "crowd-r1-terminal-install-v1",
+  "source_commit": "cc67628b3fe86b75c8005dfa15dd982c9ec5a78c",
+  "package": {
+    "file": "crowd-v4.2.104-pro-mac-terminal.zip",
+    "bytes": 1114651,
+    "sha256": "fbed70488059763fe251b4f695c3c7831050cdbaf67b4297a9195e50dd4dad2a"
+  },
+  "source_sha256": "5952ba456943e47d4f7001a0886da6ef89bbbf309f13f58b4e3995b4ee2236db",
+  "changed_from_previous_package": [
+    "pro-binding-continuation.py",
+    "INSTALL-SHA256.txt",
+    "package-source.json"
+  ],
+  "remaining_archive_entries_exact": 159,
+  "runtime_files": 128,
+  "normal_existing_mac_install": {
+    "exit_code": 0,
+    "seconds": 12.027339165999999,
+    "local_native_hello": "ready",
+    "pending": 0,
+    "identity_and_existing_data_preserved": true,
+    "bounded_databases_compared": 17
+  },
+  "independent_adoption_review_sha256": "07d1ae19b8f0d59760bb7085360cc2b695bd59a4975edcf85e70c53cee6118fa",
+  "kimi_3_5_3_preserved": true,
+  "kimi_replacement_or_advantage_claimed": false,
+  "stable_ota_changed": false,
+  "platform_or_source_or_new_task_started": false,
+  "unverified": [
+    "new physical Mac full installation",
+    "live Chrome load",
+    "platform login",
+    "new collection and cloud receipt",
+    "Windows",
+    "continuous OTA",
+    "Kimi usability advantage"
+  ]
+}
