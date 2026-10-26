@@ -40,6 +40,23 @@ configure_pro_if_present() {
   local pro_settings="$HOME/Library/Application Support/CrowdV4Updater/pro-install-settings.json"
   local pro_helper="$HOME/Library/Application Support/CrowdV4Updater"
   local pro_dependencies="$pro_helper/pro-dependency-settings.json"
+  # Package contents select the optional enhancement, never another installation's settings.
+  local pro_payload=false pro_file
+  for pro_file in pro-runtime configure-pro.py bootstrap-pro-tools.command prepare-pro-dependencies.py prepare-and-configure-pro.py prepare-pro-downloader.py pro-binding-continuation.py portable_node.py PRO-LOCAL-SOURCE-PINS.json; do
+    if [[ -e "$PACKAGE_DIR/$pro_file" || -L "$PACKAGE_DIR/$pro_file" ]]; then pro_payload=true; break; fi
+  done
+  if [[ "$pro_payload" == false ]]; then
+    if (( ${#PRO_INSTALL_OPTIONS} )); then
+      print '基础采集包不接受 Pro 额度设置；原配置未更改。'
+      return 1
+    fi
+    print '基础采集包无需 Pro 组件；本机已有增强配置保持不变。'
+    return 0
+  fi
+  if [[ ! -d "$PACKAGE_DIR/pro-runtime" || -L "$PACKAGE_DIR/pro-runtime" || ! -f "$PACKAGE_DIR/pro-runtime/PRO-RUNTIME.json" || -L "$PACKAGE_DIR/pro-runtime/PRO-RUNTIME.json" ]]; then
+    print 'Pro 增强包资源不完整；本次未更改原配置，请重新取得完整安装包。'
+    return 1
+  fi
   if [[ -f "$pro_dependencies" && ! -L "$pro_dependencies" ]] || [[ ! -e "$pro_settings" && ! -L "$pro_settings" && -f "$PACKAGE_DIR/pro-runtime/PRO-RUNTIME.json" ]]; then
     print '正在按官方锁文件准备 Pro 和签名服务依赖；不下载私有 SDK、不启动采集。'
     local pro_install_python
