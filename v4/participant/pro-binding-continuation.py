@@ -12,6 +12,7 @@ from pathlib import Path
 import sqlite3
 import stat
 import tempfile
+import uuid
 
 
 def need(ok, code='dependency_binding_invalid'):
@@ -208,6 +209,51 @@ class BindingContinuation:
         need(read(descriptor_path) == descriptor_raw and self.scope() == before, 'dependency_binding_scope_changed')
         self.signer_scope = before
 
+    def completed_source_for_upgrade(self, task, run_id, raw):
+        # A stale Worker row is not settlement. This proof permits only pointer
+        # installation under the existing session lock, never resume or quota.
+        code = 'dependency_native_pending'
+        def valid_uuid(value):
+            try:
+                return type(value) is str and str(uuid.UUID(value)) == value
+            except (ValueError, TypeError, AttributeError):
+                return False
+        installed = json.loads(self.config_before) if self.config_before is not None else self.original
+        need(self.values['max_api_requests'] == installed['max_api_requests'], code)
+        need(type(task) is int and task > 0 and valid_uuid(run_id), code)
+        context = json.loads(raw)
+        run = self.root/'runs'/run_id
+        manifest = json.loads(read(run/'manifest.json'))
+        status = json.loads(read(run/'status.json'))
+        need(type(manifest) is dict and type(status) is dict and type(manifest.get('executor')) is dict, code)
+        request = manifest.get('request'); source_context = manifest.get('participant_pro')
+        need(type(context) is dict and type(request) is dict and type(source_context) is dict, code)
+        need(manifest.get('run_id') == run_id and manifest.get('executor',{}).get('backend') == 'pro', code)
+        need(request.get('session_id') == self.original['session_id']
+             and request.get('platform') == 'xhs' and request.get('source_executor') == 'pro'
+             and request.get('purpose') == self.original['purpose'], code)
+        request_sha = sha(json.dumps(request, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False).encode())
+        need(context.get('schema') == 'crowd-participant-pro-local-v1'
+             and context.get('request_sha256') == request_sha
+             and encoded(source_context) == encoded({k:v for k,v in context.items() if k != 'captured_at'}), code)
+        binding = context.get('binding'); start = context.get('native_start')
+        need(type(binding) is dict and type(start) is dict
+             and set(start) == {'subject','installation_id','task_id','intent'}, code)
+        need(binding.get('profile') == 'native-messaging' and binding.get('transport') == 'native'
+             and type(binding.get('generation')) is int and binding['generation'] >= 0
+             and all(valid_uuid(binding.get(k)) for k in ('subject','installation_id','native_session'))
+             and valid_uuid(start.get('intent')), code)
+        need(type(context.get('task_id')) is int and context['task_id'] == task
+             and type(start.get('task_id')) is int and start['task_id'] == task
+             and context.get('installation_id') == binding['installation_id'] == start['installation_id']
+             and binding['subject'] == start['subject'], code)
+        need(status.get('run_id') == run_id and status.get('session_id') == self.original['session_id']
+             and status.get('platform') == 'xhs' and status.get('state') == 'completed'
+             and status.get('phase') == 'completed' and type(status.get('exit_code')) is int
+             and status['exit_code'] == 0 and not any(k.startswith('stop') for k in status)
+             and status.get('upstream_status', 'completed') == 'completed'
+             and not os.path.lexists(run/'stop.json'), code)
+
     def idle(self):
         state = self.helper/'pro-state.json'
         if state.exists():
@@ -222,7 +268,18 @@ class BindingContinuation:
                 if 'participant_delivery' in tables:
                     need(connection.execute("select count(*) from participant_delivery where state != 'delivered'").fetchone()[0] == 0, 'dependency_native_pending')
                 if 'participant_runs' in tables:
-                    need(connection.execute("select count(*) from participant_runs where state not in ('complete','stopped','source_failed')").fetchone()[0] == 0, 'dependency_native_pending')
+                    pending = connection.execute("select count(*) from participant_runs where state is null or state not in ('complete','stopped','source_failed')").fetchone()[0]
+                    if pending:
+                        need(state.exists() and 'participant_delivery' in tables, 'dependency_native_pending')
+                        delivery_columns = {r[1] for r in connection.execute('pragma table_info(participant_delivery)')}
+                        need({'request','task','content_id','params','state','receipt'} <= delivery_columns, 'dependency_native_pending')
+                        need(connection.execute("select count(*) from participant_delivery where state is null or state != 'delivered' or receipt is null or receipt = ''").fetchone()[0] == 0, 'dependency_native_pending')
+                        columns = {r[1] for r in connection.execute('pragma table_info(participant_runs)')}
+                        need({'task','state','run_id','context'} <= columns, 'dependency_native_pending')
+                        rows = connection.execute("select task,state,run_id,context from participant_runs where state is null or state not in ('complete','stopped','source_failed')").fetchall()
+                        for task, row_state, run_id, raw in rows:
+                            need(row_state == 'running', 'dependency_native_pending')
+                            self.completed_source_for_upgrade(task, run_id, raw)
 
     def install(self, configure):
         # This stage contains only derived settings, before-images, and once evidence.
