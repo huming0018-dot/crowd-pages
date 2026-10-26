@@ -1,0 +1,32 @@
+{
+  "schema": "crowd-r1-install-test-release-v1",
+  "date": "2026-10-26",
+  "state": "implementation_and_isolated_dependency_path_passed_full_R1_unverified",
+  "package": {
+    "file": "crowd-v4.2.104-pro-native128-mac-install-test.zip",
+    "bytes": 1113614,
+    "sha256": "d75dcee82d87317039ebbb6f14d0125f4cf453811ef8d65ef71e008509727899"
+  },
+  "source_commits": {
+    "crowd-pages": "fb08b1d1a4f11448a5fc82ab73d0d72632af9c14",
+    "crowd-kol": "2a942d6e8c16330711886ce90035a25e647cc6a2"
+  },
+  "review_sha256": "ab2b5824705ab8c321a57a1dfbeb2da6c426d987785fbfb615dae381ea6a5595",
+  "source_manifest_sha256": "d3618a938b8871612e5ec7407562b50c5a29d5034daa63f8cf95dbba5af90f14",
+  "runtime_manifest_sha256": "78af39f2fd54754a2d6fc13af6351eb321978c505b7b6aaab4596ed841a497f4",
+  "runtime_files": 128,
+  "baseline_files_preserved": 125,
+  "stable_ota_changed": false,
+  "private_sdk_bundled": false,
+  "unverified": [
+    "Native registration",
+    "physical fresh Mac full installation",
+    "Intel Mac",
+    "login",
+    "Start",
+    "new cloud receipt",
+    "OTA"
+  ],
+  "isolated_dependency_seconds": 21.309614000000003,
+  "timing_scope": "existing arm64 Mac, private empty HOME, verified official archives cached; not cold network or whole installation"
+}

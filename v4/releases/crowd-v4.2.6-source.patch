@@ -1,0 +1,83 @@
+--- a/v4/src/agent.js
++++ b/v4/src/agent.js
+@@ -113,7 +113,8 @@
+         if (recover || (s.last_tick != null && now - s.last_tick > 120000)) {
+           if (s.enrichment) { s.enrichment.stage = 'done'; }
+           if (s.phase === 'note') { s.phase = 'reopen_note'; s.loaded_at = null; s.scrolls = 0; }
+-          else if (s.phase === 'search') { s.phase = 'idle'; s.search_round = 0; }
++          // An admitted search survives suspension. Probe its existing page and
++          // original deadline; resetting to idle would charge and navigate again.
+           // Keep persisted cooldowns, quota waits and evidence retry deadlines.
+         }
+         s.last_tick = now; await this.save(s); alive();
+@@ -287,7 +288,7 @@
+           }
+         }
+         if (err.message==='navigation_uncommitted') await this.r.trace?.('navigation_timeout');
+-        if (['navigation_failed', 'navigation_uncommitted', 'captcha', 'rate_limit', 'login_required', 'backend_login_required', 'page_mismatch', 'approval_required', 'consent_required', 'review_local_rejections', 'unsupported_platform'].includes(err.message) || err.status === 401 || err.status === 403) {
++        if (['navigation_failed', 'navigation_uncommitted', 'page_loading', 'page_timeout', 'content_unavailable', 'probe_timeout', 'captcha', 'rate_limit', 'login_required', 'backend_login_required', 'page_mismatch', 'approval_required', 'consent_required', 'review_local_rejections', 'unsupported_platform'].includes(err.message) || err.status === 401 || err.status === 403) {
+           s.enabled = false; await this.save(s); await this.r.cancel(); return;
+         }
+         if (pageFailure || err.message === 'wrong_note') {
+@@ -457,7 +458,10 @@
+     checkPage(page, s, now) {
+       if (page.gate) throw new Error(page.gate);
+       if (page.ready) s.last_error = null;
+-      if (page.reopen) { s.phase = s.phase === 'note' ? 'reopen_note' : 'idle'; s.search_round = 0; s.next_at = now + 30000; return; }
++      if (page.reopen) {
++        if (s.phase === 'search') throw new Error('navigation_failed');
++        s.phase = 'reopen_note'; s.search_round = 0; s.next_at = now + 30000; return;
++      }
+       if (!page.ready) { if (now > s.page_deadline) throw new Error(['navigation_uncommitted','page_loading','content_unavailable','probe_timeout'].includes(page.reason) ? page.reason : 'page_timeout'); s.next_at = now + 30000; }
+     }
+   }
+--- a/v4/src/controller.js
++++ b/v4/src/controller.js
+@@ -26,10 +26,10 @@
+ errors.update_in_progress = '插件正在更新，完成后会自动恢复原状态。你仍可停止采集。';
+ errors.navigation_failed = '浏览器未能执行搜索或详情跳转，已停止。原工作页与证据保留，请查看采集页面；不会自动重试消耗访问次数。';
+ errors.navigation_uncommitted = '工作页仍为空白，跳转在等待期限内未完成，已停止。原页面与证据保留；不会自动重试消耗访问次数。';
+-errors.page_timeout = '采集页面准备超时。连续失败三次会暂停，请查看采集页面并保持运行诊断开启。';
+-errors.page_loading = '采集页面尚未就绪，未取得可读取内容。连续失败三次会暂停；诊断开启时由中台排查。';
+-errors.content_unavailable = '页面已结束加载，但采集脚本未响应。请检查浏览器是否允许此插件访问小红书。';
+-errors.probe_timeout = '采集页面没有及时响应，可能卡住；连续失败三次会暂停。';
++errors.page_timeout = '采集页面准备超时，已停止新访问并保留工作页；不会自动重新搜索。';
++errors.page_loading = '采集页在等待期限内仍未就绪，已停止新访问并保留工作页。不会自动重新搜索；诊断开启时由中台排查。';
++errors.content_unavailable = '页面已结束加载，但采集脚本未响应，已停止新访问。请检查浏览器是否允许此插件访问小红书。';
++errors.probe_timeout = '采集页面没有及时响应，已停止新访问并保留工作页；不会自动重新搜索。';
+ errors.page_mismatch = '当前页面搜索词与任务不一致，已暂停。点击继续会重新打开任务页面。';
+ errors.daily_quota = '今日配额已满，已有证据保留，稍后自动重试。';
+ errors.unsupported_platform = '此任务的平台尚未接入当前版本，已暂停，请等待平台支持更新。';
+--- a/v4/src/background.js
++++ b/v4/src/background.js
+@@ -82,7 +82,7 @@
+     try {
+       pendingTabCreation = (async () => {
+         const [window] = await chrome.windows.getAll({windowTypes: ['normal']});
+-        const tab = window ? await chrome.tabs.create({url, windowId: window.id, active: false}) :
++        const tab = window ? await chrome.tabs.create({url, active: false}) :
+           (await chrome.windows.create({url, type: 'normal', state: 'minimized', focused: false})).tabs[0];
+         await storage.set('work_tab', tab.id);
+         await trace.event('tab_created');
+--- a/v4/src/core.js
++++ b/v4/src/core.js
+@@ -1,7 +1,7 @@
+ /* One contract for desktop and native containers. No page receives credentials. */
+ (function (root) {
+   'use strict';
+-  const VERSION = '4.2.3', CONSENT = 'crowd-public-v4';
++  const VERSION = '4.2.6', CONSENT = 'crowd-public-v4';
+   const HOST = 'https://www.xiaohongshu.com';
+   const publicOrigin = u => u.protocol === 'https:' && ['www.xiaohongshu.com', 'm.xiaohongshu.com'].includes(u.hostname) && !u.username && !u.password && !u.port;
+   function noteURL(value) {
+--- a/v4/manifest.json
++++ b/v4/manifest.json
+@@ -2,7 +2,7 @@
+   "manifest_version": 3,
+   "minimum_chrome_version": "120",
+   "name": "众包公开笔记采集",
+-  "version": "4.2.3",
++  "version": "4.2.6",
+   "description": "自愿参与、自动任务与公开网页采集，验证与奖励分账，遇到验证或限流立即暂停。",
+   "permissions": [
+     "storage",

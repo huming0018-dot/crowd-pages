@@ -1,0 +1,20 @@
+{
+  "kind": "linux-arm64-machine-node",
+  "date": "2026-10-23",
+  "source_commit": "959da4f48866aa9033567659a5bbb71fc2883e90",
+  "runtime_sha256": "12d03bd2bbee1bb50a47d2fa8d70c793395f1f06a384991700b9eca954dab2f8",
+  "archive": "crowd-linux-arm64-worker-git-bootstrap.tar.gz",
+  "archive_sha256": "27e414f1e6c67376c1f08aa13872048a6f7810bac2b0a5a08b7ef068891bf9c5",
+  "archive_bytes": 525703,
+  "files": 147,
+  "verified": "isolated Linux arm64 public-tool install; previous same runtime real worker/receipts/recovery evidence unchanged",
+  "fresh_install_status": "complete exit0 in29s; distinct fresh HOME/root with pre-existing system Python/Git and verified public cache; login/cloud acceptance pending",
+  "not_verified": [
+    "empty OS single-pass complete licensed-worker install",
+    "physical Linux",
+    "Windows WSL2 host",
+    "cross-OS unattended OTA"
+  ],
+  "private_sdk_or_credentials_included": false,
+  "ota_channel_changed": false
+}

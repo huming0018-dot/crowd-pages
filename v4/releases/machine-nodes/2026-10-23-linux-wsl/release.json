@@ -1,0 +1,28 @@
+{
+  "kind": "linux-wsl-machine-node",
+  "date": "2026-10-23",
+  "source_commit": "b1b5814363333afb3dbcc55b4c4020ad7015e768",
+  "source_overlays": {
+    "portable_node.py": "98b7066375aa4cf736821d9095094c887548acff6f55d4dd9e69fbe9c0959901",
+    "windows-wsl.ps1": "00a6ec7308c3fa6bb59d73ef7e70037ec542c4624608bd6ee6b606ff8ef4c4ac"
+  },
+  "runtime_sha256": "63073aea928a3107a463c6150677738afb9de48628ecb6dcc1b600fb2024a20a",
+  "runtime_scope": "G137133-file runtime; only portable_node.py changes,132other modules exact; not entire current Git HEAD",
+  "archive": "crowd-linux-wsl-worker.tar.gz",
+  "archive_sha256": "31b2d6bb59724db7c30be067673bfc66ef4403a184eb136403f1dc897f4750e3",
+  "archive_bytes": 527574,
+  "files": 147,
+  "architecture": "original Linux arm64/x86_64 selection; no binaries/cache included",
+  "source_package_review_sha256": "2e32de363d2b64ceb5d267144cf65c752393b39bdefa111042664b005cf68d91",
+  "verified": "offline Node deadline/WSL argument regression and incremental package; priorG137same-host Linux login/source/96ACK/fault unchanged",
+  "root_observed_windows_precheck": "Windows11; Ubuntu WSL2; uname x86_64; package install/auth/task not yet verified",
+  "not_verified": [
+    "G138runtime actual installation/source/cloud",
+    "Windows WSL2 full installation/login/task",
+    "physical Linux",
+    "cross-OS unattended OTA",
+    "fresh browser login"
+  ],
+  "private_sdk_or_credentials_included": false,
+  "ota_channel_changed": false
+}

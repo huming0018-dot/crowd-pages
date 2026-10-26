@@ -1,0 +1,5 @@
+4.2.5已审发布。原设备接通参见同目录crowd-v4.2.5-bootstrap-mac.txt。
+扩展SHA256 ca0b396a7d564319ccc413bd7d3275d0208c7b98cc90c3caa3088c87eceff234
+接通包SHA256 a7e14376f0464f8c2c0544b731bb49fa075cdec25310a9d569d86953363bf846
+固定包提交 f3143138226541415702c8a05c4d64876d9fb81f
+签名channel-kol.json，sequence2026100906；旧channel.json保持4.2.3。

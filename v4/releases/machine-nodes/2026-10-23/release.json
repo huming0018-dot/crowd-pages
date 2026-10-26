@@ -1,0 +1,20 @@
+{
+  "kind": "linux-arm64-machine-node",
+  "date": "2026-10-23",
+  "source_commit": "17a1e9e2a66f402d14a555b10fd5c61b389ea398",
+  "runtime_sha256": "12d03bd2bbee1bb50a47d2fa8d70c793395f1f06a384991700b9eca954dab2f8",
+  "archive": "crowd-linux-arm64-worker-bootstrap.tar.gz",
+  "archive_sha256": "309e5da1ec7395bf29df6922fb2d346180b30d76a9613d5e4f62df002278e678",
+  "archive_bytes": 524567,
+  "files": 147,
+  "verified": "Linux arm64 Docker: existing install check, original account status reuse, auto task claim,96 real receipts,20s pending recovery",
+  "not_verified": [
+    "Windows WSL2 host",
+    "physical Linux",
+    "fresh host full licensed-component login",
+    "online apt git install",
+    "cross-OS unattended OTA"
+  ],
+  "private_sdk_or_credentials_included": false,
+  "legacy_participant_ota_channel_changed": false
+}
