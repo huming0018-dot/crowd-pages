@@ -10,6 +10,10 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
+R3_BASE_EXTENSION_SHA256 = '0f65751fd0c3be90c4af6c8e434aa4a628d5c27af7e0ae47c25668686c08cc57'
+R3_BASE_MIGRATION_PROFILE = ('r3-base-helper-v1 channel-participants-base.json '
+    'b653d69911655b1294e3ef7f63c18f229ba13b864a205bb2609d838412d91988 '
+    'db457d8604f9902c687c82ffc15d7af01eea3e2b289ca32ab60fd8c1b979b187')
 
 
 def digest(data):
@@ -51,12 +55,21 @@ def pack(path, files):
     return {'path': str(path), 'bytes': path.stat().st_size, 'sha256': checksum}
 
 
-def build(extension, helper, output, pro_runtime=None):
+def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, fixture_only=False):
     extension, helper, output = Path(extension).resolve(), Path(helper).resolve(), Path(output).resolve()
     version, files = extension_files(extension)
+    if fixture_only and not r3_base_migration:
+        raise ValueError('fixture-only package requires R3 base migration')
+    if r3_base_migration:
+        if pro_runtime is not None or version != '4.2.94' or digest(extension.read_bytes()) != R3_BASE_EXTENSION_SHA256:
+            raise ValueError('R3 base migration requires exact frozen extension and no Pro runtime')
+        if fixture_only and b'CROWD_TEST_INSTALL_HOME' not in helper.read_bytes():
+            raise ValueError('fixture package requires a TESTING helper')
     if set(subprocess.check_output(['lipo', '-archs', str(helper)], text=True).split()) != {'x86_64', 'arm64'}:
         raise ValueError('universal Mac helper required')
     subprocess.run(['codesign', '--verify', '--strict', str(helper)], check=True, capture_output=True)
+    if r3_base_migration and subprocess.check_output([str(helper), '--migration-profile'], text=True).strip() != R3_BASE_MIGRATION_PROFILE:
+        raise ValueError('helper is not pinned R3 base migration')
     # The production helper enforces the original extension ID and exact capability shape.
     with tempfile.TemporaryDirectory(prefix='crowd-participant-package-') as temporary:
         directory = Path(temporary)
@@ -76,7 +89,7 @@ def build(extension, helper, output, pro_runtime=None):
         raise ValueError('participant manifest key required')
     base = {
         helper_name: helper_bytes,
-        'reconnect.command': (ROOT / 'participant/reconnect.command').read_text().replace('@NATIVE_PROTOCOL@', native_protocol).encode(),
+        'reconnect.command': (ROOT / 'participant/reconnect.command').read_text().replace('@NATIVE_PROTOCOL@', native_protocol).replace('@R3_BASE_MIGRATION@', str(r3_base_migration).lower()).replace('@FIXTURE_ONLY@', str(fixture_only).lower()).encode(),
         'browser-preflight.command': (ROOT / 'participant/browser-preflight.command').read_bytes(),
         'MIGRATION-README.md': (ROOT / 'participant/MIGRATION-README.md').read_bytes(),
         'browser-preflight.js': (ROOT / 'participant/browser-preflight.js').read_text().replace('@EXTENSION_KEY@', extension_key).encode(),
@@ -106,7 +119,7 @@ def build(extension, helper, output, pro_runtime=None):
             pro_files[name] = (ROOT / 'participant' / name).read_bytes()
     base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command')).encode()
     install = {**base, **pro_files, archive_name: extension.read_bytes()}
-    install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).replace('@NATIVE_PROTOCOL@', native_protocol).encode()
+    install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).replace('@NATIVE_PROTOCOL@', native_protocol).replace('@R3_BASE_MIGRATION@', str(r3_base_migration).lower()).replace('@FIXTURE_ONLY@', str(fixture_only).lower()).encode()
     install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command', 'install.command', *sorted(pro_files))).encode()
     guide = (ROOT / 'participant/安装说明.html').read_text().replace('@VERSION@', version)
     errors = {
@@ -133,19 +146,24 @@ def build(extension, helper, output, pro_runtime=None):
     install.update(support)
     # The small legacy reconnect ZIP also gets one entrance, but never installs a new identity.
     reconnect = {**base, **support}
-    reconnect['install.command'] = ("#!/bin/zsh\nset -eu\nPACKAGE_DIR=\"${0:A:h}\"\ncd \"$PACKAGE_DIR\"\n"
+    reconnect['install.command'] = ("#!/bin/zsh\nprint '此包仅供隔离验收，不能在参与者电脑上安装。'\nexit 1\n" if fixture_only else
+        "#!/bin/zsh\nset -eu\nPACKAGE_DIR=\"${0:A:h}\"\ncd \"$PACKAGE_DIR\"\n"
         "if ./reconnect.command; then /usr/bin/open \"$PACKAGE_DIR/existing.html\" || true; "
         "else /usr/bin/open \"$PACKAGE_DIR/help.html\" || true; exit 1; fi\n").encode()
     source_files = ['build_participant.py', 'participant/install.command', 'participant/browser-preflight.js', 'participant/browser-preflight.command', 'participant/reconnect.command',
                     'participant/configure-pro.py', 'participant/bootstrap-pro-tools.command', 'participant/prepare-pro-dependencies.py', 'participant/prepare-and-configure-pro.py', 'participant/prepare-pro-downloader.py', 'participant/pro-binding-continuation.py', 'participant/start.command', 'participant/安装说明.html', 'participant/安装说明.md', 'participant/MIGRATION-README.md']
-    provenance = {'package_revision': 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()), 'native_protocol': native_protocol,
+    provenance = {'package_revision': 4 if r3_base_migration else 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()), 'native_protocol': native_protocol,
                   'helper_sha256': digest(helper.read_bytes()), 'pro_runtime_files': {name: digest(data) for name, data in pro_files.items()},
                   'source_sha256': {name: digest((ROOT / name).read_bytes()) for name in source_files}}
+    if r3_base_migration:
+        provenance['migration_profile'] = 'r3-base-helper-v1'
+        provenance['fixture_only'] = fixture_only
     install['package-source.json'] = (json.dumps(provenance, ensure_ascii=False, indent=2) + '\n').encode()
     reconnect['package-source.json'] = install['package-source.json']
     wrap = lambda contents: {**visible, **{'.crowd-support/' + name: data for name, data in contents.items()}}
+    reconnect_name = output.stem + '-reconnect.zip' if r3_base_migration else f'crowd-v{version}-existing-helper-reconnect.zip'
     result = {**provenance, 'mac': pack(output, wrap(install)),
-              'reconnect': pack(output.parent / '.internal' / f'crowd-v{version}-existing-helper-reconnect.zip', wrap(reconnect))}
+              'reconnect': pack(output.parent / '.internal' / reconnect_name, wrap(reconnect))}
     output.with_suffix('.build.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
 
@@ -156,5 +174,8 @@ if __name__ == '__main__':
     parser.add_argument('--helper', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--pro-runtime', type=Path)
+    parser.add_argument('--r3-base-migration', action='store_true')
+    parser.add_argument('--fixture-only', action='store_true')
     options = parser.parse_args()
-    print(json.dumps(build(options.extension, options.helper, options.output, options.pro_runtime)))
+    print(json.dumps(build(options.extension, options.helper, options.output, options.pro_runtime,
+        options.r3_base_migration, options.fixture_only)))

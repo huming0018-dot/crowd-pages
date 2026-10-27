@@ -2,6 +2,12 @@
 set -eu
 PACKAGE_DIR="${0:A:h}"
 PACKAGE_NATIVE_PROTOCOL='@NATIVE_PROTOCOL@'
+PACKAGE_R3_BASE_MIGRATION='@R3_BASE_MIGRATION@'
+PACKAGE_FIXTURE_ONLY='@FIXTURE_ONLY@'
+if [[ "$PACKAGE_FIXTURE_ONLY" == true ]]; then
+  print '此包仅供隔离验收，不能在参与者电脑上安装。'
+  exit 1
+fi
 cd "$PACKAGE_DIR"
 /usr/bin/shasum -a 256 -c MIGRATE-SHA256.txt
 if [[ ! -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
@@ -17,6 +23,10 @@ fi
 BROWSER_CHECK="$("$PACKAGE_DIR/browser-preflight.command" "$ORIGINAL_DIR" 2>/dev/null || true)"
 if [[ "$BROWSER_CHECK" != clear && "$BROWSER_CHECK" != compatible_registered ]]; then
   print 'Chrome 原插件与标准更新路径尚未核对。本次没有接续；请保留旧插件、身份和任务，把提示交给邀请人。'
+  exit 1
+fi
+if [[ "$PACKAGE_R3_BASE_MIGRATION" == true && "$BROWSER_CHECK" != compatible_registered ]]; then
+  print '没有核到同一Chrome资料中的原R3插件；本次未接续。'
   exit 1
 fi
 # Native helper reads only its fixed config.directory, validates the exact approved

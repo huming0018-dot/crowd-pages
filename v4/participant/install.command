@@ -12,6 +12,12 @@ if (( $# )); then
 fi
 PACKAGE_DIR="${0:A:h}"
 PACKAGE_NATIVE_PROTOCOL='@NATIVE_PROTOCOL@'
+PACKAGE_R3_BASE_MIGRATION='@R3_BASE_MIGRATION@'
+PACKAGE_FIXTURE_ONLY='@FIXTURE_ONLY@'
+if [[ "$PACKAGE_FIXTURE_ONLY" == true ]]; then
+  print '此包仅供隔离验收，不能在参与者电脑上安装。'
+  exit 1
+fi
 INSTALL_DIR="$HOME/Library/Application Support/CrowdParticipantExtension"
 cd "$PACKAGE_DIR"
 INSTALL_NONCE="$$-$RANDOM-$RANDOM"
@@ -121,6 +127,9 @@ ORIGINAL_DIR=''
 if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
   ORIGINAL_DIR="$(/usr/bin/plutil -extract directory raw -expect string -o - "$HOME/Library/Application Support/CrowdV4Updater/config.json" 2>/dev/null || true)"
 fi
+if [[ "$PACKAGE_R3_BASE_MIGRATION" == true && -z "$ORIGINAL_DIR" ]]; then
+  fail existing '此接续包只接受已有冻结R3基础安装；没有原更新助手目录，本次不安装新身份。'
+fi
 # Absence of a native helper does not mean Chrome has no older same-ID extension.
 BROWSER_CHECK="$("$PACKAGE_DIR/browser-preflight.command" "$ORIGINAL_DIR" 2>/dev/null || true)"
 case "$BROWSER_CHECK" in
@@ -129,6 +138,9 @@ case "$BROWSER_CHECK" in
   browser_reconnect_required) fail browser-existing 'Chrome 中已有同一参与者插件，但与当前更新助手的目录不一致。为保留原身份，本次不覆盖；请联系邀请人核对。' ;;
   *) fail browser-unknown '暂时无法确认 Chrome 原插件的安装情况。为保护原身份，本次没有安装或接续；请把此提示交给邀请人。' ;;
 esac
+if [[ "$PACKAGE_R3_BASE_MIGRATION" == true && "$BROWSER_CHECK" != compatible_registered ]]; then
+  fail browser-existing '没有核到同一Chrome资料中的原R3插件；本次未接续。'
+fi
 if [[ "$PACKAGE_NATIVE_PROTOCOL" != participant_pro_v2 && -n "$ORIGINAL_DIR" && ( -e "$ORIGINAL_DIR/src/participant-pro.js" || -L "$ORIGINAL_DIR/src/participant-pro.js" ) ]]; then
   fail incompatible '检测到原参与者是 Pro 客户端。基础包不会替换其 Native helper；原安装已保留，请使用对应 Pro 接续包。'
 fi
