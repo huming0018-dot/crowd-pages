@@ -55,18 +55,25 @@ def pack(path, files):
     return {'path': str(path), 'bytes': path.stat().st_size, 'sha256': checksum}
 
 
-def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, fixture_only=False):
+def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, fixture_only=False, fresh_only=False):
     extension, helper, output = Path(extension).resolve(), Path(helper).resolve(), Path(output).resolve()
     version, files = extension_files(extension)
     helper_bytes = helper.read_bytes()
     if fixture_only and not r3_base_migration:
         raise ValueError('fixture-only package requires R3 base migration')
+    testing_helper = b'CROWD_TEST_INSTALL_HOME' in helper_bytes
+    if testing_helper != fixture_only:
+        raise ValueError('TESTING helper requires --fixture-only' if testing_helper else 'fixture package requires a TESTING helper')
+    if fresh_only:
+        release = json.loads(files['release.json'])
+        if (r3_base_migration or pro_runtime is not None or release.get('profile') != 'participant'
+                or release.get('execution_engine') != 'crowd-base-dom-v1'
+                or b'channel-participants-base.json' not in helper_bytes
+                or b'crowd-base-dom-v1' not in helper_bytes):
+            raise ValueError('fresh base package requires current base extension and helper without Pro runtime')
     if r3_base_migration:
         if pro_runtime is not None or version != '4.2.94' or digest(extension.read_bytes()) != R3_BASE_EXTENSION_SHA256:
             raise ValueError('R3 base migration requires exact frozen extension and no Pro runtime')
-        testing_helper = b'CROWD_TEST_INSTALL_HOME' in helper_bytes
-        if testing_helper != fixture_only:
-            raise ValueError('TESTING helper requires --fixture-only' if testing_helper else 'fixture package requires a TESTING helper')
     if set(subprocess.check_output(['lipo', '-archs', str(helper)], text=True).split()) != {'x86_64', 'arm64'}:
         raise ValueError('universal Mac helper required')
     subprocess.run(['codesign', '--verify', '--strict', str(helper)], check=True, capture_output=True)
@@ -84,6 +91,8 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
     helper_name = 'crowd-v4-participant-updater'
     # Reconnect ZIPs omit runtime; capability belongs to their checksum-pinned helper.
     supports_pro = all(verb in helper_bytes for verb in (b'pro_hello', b'pro_start', b'pro_status', b'pro_stop'))
+    if fresh_only and supports_pro:
+        raise ValueError('fresh base package cannot use a Pro helper')
     native_protocol = 'participant_pro_v2' if supports_pro else 'ota_only'
     extension_key = json.loads(files['manifest.json']).get('key', '')
     if not re.fullmatch(r'[A-Za-z0-9+/=]+', extension_key):
@@ -95,6 +104,8 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
         'MIGRATION-README.md': (ROOT / 'participant/MIGRATION-README.md').read_bytes(),
         'browser-preflight.js': (ROOT / 'participant/browser-preflight.js').read_text().replace('@EXTENSION_KEY@', extension_key).encode(),
     }
+    if fresh_only:
+        base['reconnect.command'] = "#!/bin/zsh\nprint '此包仅供全新安装，已有安装请联系邀请人接续。'\nexit 1\n".encode()
     # Optional own-code runtime. Licensed SDK, venv, profiles and bindings stay local.
     pro_files = {}
     if pro_runtime is not None:
@@ -120,9 +131,11 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
             pro_files[name] = (ROOT / 'participant' / name).read_bytes()
     base['MIGRATE-SHA256.txt'] = ''.join(digest(base[name]) + '  ' + name + '\n' for name in (helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command')).encode()
     install = {**base, **pro_files, archive_name: extension.read_bytes()}
-    install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).replace('@NATIVE_PROTOCOL@', native_protocol).replace('@R3_BASE_MIGRATION@', str(r3_base_migration).lower()).replace('@FIXTURE_ONLY@', str(fixture_only).lower()).encode()
+    install['install.command'] = (ROOT / 'participant/install.command').read_text().replace('@EXTENSION_ARCHIVE@', archive_name).replace('@NATIVE_PROTOCOL@', native_protocol).replace('@R3_BASE_MIGRATION@', str(r3_base_migration).lower()).replace('@FIXTURE_ONLY@', str(fixture_only).lower()).replace('@FRESH_ONLY@', str(fresh_only).lower()).encode()
     install['INSTALL-SHA256.txt'] = ''.join(digest(install[name]) + '  ' + name + '\n' for name in (archive_name, helper_name, 'browser-preflight.js', 'browser-preflight.command', 'reconnect.command', 'install.command', *sorted(pro_files))).encode()
     guide = (ROOT / 'participant/安装说明.html').read_text().replace('@VERSION@', version)
+    if fresh_only:
+        guide = guide.replace('已有标准安装会自动接续，不需要重装扩展。', '本包仅用于全新安装；发现旧安装会停止。').replace('已有标准参与者安装会接续原目录和身份。', '本包发现已有标准参与者安装会拒绝覆盖，并保留原目录和身份。')
     errors = {
         'os': ('这台 Mac 的系统版本还不够', '本包需要 macOS 14 或更新系统。此次未安装，请先更新系统或联系邀请人。'),
         'chrome': ('请先安装或更新 Google Chrome', '没有安装 Chrome：先从 <a href="https://www.google.com/chrome/" rel="noreferrer" target="_blank">Google 官网下载安装</a>。已经安装：打开 Chrome 菜单中的“关于 Google Chrome”完成更新，需达到120或更新版本。完成后重新双击“开始安装.command”。'),
@@ -139,8 +152,11 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
         return guide.replace('@MODE@', mode).replace('@ERROR_MESSAGE@', title).replace('@ERROR_NEXT@', message).encode()
     entry = (ROOT / 'participant/start.command').read_bytes()
     # Keep one visible executable entry; signed extension/helper bytes stay intact.
+    instructions = (ROOT / 'participant/安装说明.md').read_text().replace('@VERSION@', version)
+    if fresh_only:
+        instructions = instructions.replace('已有标准参与者安装会自动接续。', '本包只用于全新参与者；已有标准参与者安装会拒绝覆盖并保留原身份。').replace('Pro 采集还需要本设备已有合法 SDK 和账号绑定。安装器会按官方锁文件准备已配置的依赖；缺失时明确显示未就绪，不替换原账号。依赖安装完成不代表已经登录或开始采集。', '本基础包不需要 Pro SDK、账号绑定或额外依赖。基础正文能力仍须本人完成 Chrome 加载与登录后才可使用。')
     visible = {'开始安装.command': entry, '安装说明.html': render('intro'),
-               '安装说明.md': (ROOT / 'participant/安装说明.md').read_text().replace('@VERSION@', version).encode()}
+               '安装说明.md': instructions.encode()}
     support = {name + '.html': render(mode) for name, mode in
                [('new', 'new'), ('existing', 'existing'), ('help', 'help')]}
     support.update({'help-' + code + '.html': render('help', code) for code in errors})
@@ -156,6 +172,8 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
     provenance = {'package_revision': 4 if r3_base_migration else 3, 'version': version, 'extension_sha256': digest(extension.read_bytes()), 'native_protocol': native_protocol,
                   'helper_sha256': digest(helper.read_bytes()), 'pro_runtime_files': {name: digest(data) for name, data in pro_files.items()},
                   'source_sha256': {name: digest((ROOT / name).read_bytes()) for name in source_files}}
+    if fresh_only:
+        provenance['install_scope'] = 'fresh_base_only'
     if r3_base_migration:
         provenance['migration_profile'] = 'r3-base-helper-v1'
         provenance['fixture_only'] = fixture_only
@@ -163,8 +181,9 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
     reconnect['package-source.json'] = install['package-source.json']
     wrap = lambda contents: {**visible, **{'.crowd-support/' + name: data for name, data in contents.items()}}
     reconnect_name = output.stem + '-reconnect.zip' if r3_base_migration else f'crowd-v{version}-existing-helper-reconnect.zip'
-    result = {**provenance, 'mac': pack(output, wrap(install)),
-              'reconnect': pack(output.parent / '.internal' / reconnect_name, wrap(reconnect))}
+    result = {**provenance, 'mac': pack(output, wrap(install))}
+    if not fresh_only:
+        result['reconnect'] = pack(output.parent / '.internal' / reconnect_name, wrap(reconnect))
     output.with_suffix('.build.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
 
@@ -177,6 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--pro-runtime', type=Path)
     parser.add_argument('--r3-base-migration', action='store_true')
     parser.add_argument('--fixture-only', action='store_true')
+    parser.add_argument('--fresh-only', action='store_true')
     options = parser.parse_args()
     print(json.dumps(build(options.extension, options.helper, options.output, options.pro_runtime,
-        options.r3_base_migration, options.fixture_only)))
+        options.r3_base_migration, options.fixture_only, options.fresh_only)))

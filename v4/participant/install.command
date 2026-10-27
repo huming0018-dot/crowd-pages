@@ -14,6 +14,7 @@ PACKAGE_DIR="${0:A:h}"
 PACKAGE_NATIVE_PROTOCOL='@NATIVE_PROTOCOL@'
 PACKAGE_R3_BASE_MIGRATION='@R3_BASE_MIGRATION@'
 PACKAGE_FIXTURE_ONLY='@FIXTURE_ONLY@'
+PACKAGE_FRESH_ONLY='@FRESH_ONLY@'
 if [[ "$PACKAGE_FIXTURE_ONLY" == true ]]; then
   print '此包仅供隔离验收，不能在参与者电脑上安装。'
   exit 1
@@ -123,6 +124,9 @@ CHROME_MAJOR="${CHROME_VERSION%%.*}"
 if [[ "$CHROME_MAJOR" != <-> ]] || (( CHROME_MAJOR < 120 )); then
   fail chrome '需要 Chrome 120 或更新版本。请在 Chrome 菜单中的“关于 Google Chrome”完成更新后重试。'
 fi
+if [[ "$PACKAGE_FRESH_ONLY" == true && ( -e "$HOME/Library/Application Support/CrowdV4Updater" || -L "$HOME/Library/Application Support/CrowdV4Updater" || -e "$INSTALL_DIR" || -L "$INSTALL_DIR" ) ]]; then
+  fail existing '此包只供全新参与者安装；检测到原更新助手或参与者目录。旧Pro/R3安装、身份和待回传记录均未覆盖，请联系邀请人接续。'
+fi
 ORIGINAL_DIR=''
 if [[ -f "$HOME/Library/Application Support/CrowdV4Updater/config.json" ]]; then
   ORIGINAL_DIR="$(/usr/bin/plutil -extract directory raw -expect string -o - "$HOME/Library/Application Support/CrowdV4Updater/config.json" 2>/dev/null || true)"
@@ -138,6 +142,9 @@ case "$BROWSER_CHECK" in
   browser_reconnect_required) fail browser-existing 'Chrome 中已有同一参与者插件，但与当前更新助手的目录不一致。为保留原身份，本次不覆盖；请联系邀请人核对。' ;;
   *) fail browser-unknown '暂时无法确认 Chrome 原插件的安装情况。为保护原身份，本次没有安装或接续；请把此提示交给邀请人。' ;;
 esac
+if [[ "$PACKAGE_FRESH_ONLY" == true && "$BROWSER_CHECK" != clear ]]; then
+  fail browser-existing 'Chrome 已有同一参与者插件；此新装包不覆盖原插件或身份，请联系邀请人接续。'
+fi
 if [[ "$PACKAGE_R3_BASE_MIGRATION" == true && "$BROWSER_CHECK" != compatible_registered ]]; then
   fail browser-existing '没有核到同一Chrome资料中的原R3插件；本次未接续。'
 fi
