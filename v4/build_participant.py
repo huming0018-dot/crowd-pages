@@ -58,17 +58,19 @@ def pack(path, files):
 def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, fixture_only=False):
     extension, helper, output = Path(extension).resolve(), Path(helper).resolve(), Path(output).resolve()
     version, files = extension_files(extension)
+    helper_bytes = helper.read_bytes()
     if fixture_only and not r3_base_migration:
         raise ValueError('fixture-only package requires R3 base migration')
     if r3_base_migration:
         if pro_runtime is not None or version != '4.2.94' or digest(extension.read_bytes()) != R3_BASE_EXTENSION_SHA256:
             raise ValueError('R3 base migration requires exact frozen extension and no Pro runtime')
-        if fixture_only and b'CROWD_TEST_INSTALL_HOME' not in helper.read_bytes():
-            raise ValueError('fixture package requires a TESTING helper')
+        testing_helper = b'CROWD_TEST_INSTALL_HOME' in helper_bytes
+        if testing_helper != fixture_only:
+            raise ValueError('TESTING helper requires --fixture-only' if testing_helper else 'fixture package requires a TESTING helper')
     if set(subprocess.check_output(['lipo', '-archs', str(helper)], text=True).split()) != {'x86_64', 'arm64'}:
         raise ValueError('universal Mac helper required')
     subprocess.run(['codesign', '--verify', '--strict', str(helper)], check=True, capture_output=True)
-    if r3_base_migration and subprocess.check_output([str(helper), '--migration-profile'], text=True).strip() != R3_BASE_MIGRATION_PROFILE:
+    if r3_base_migration and subprocess.check_output([str(helper), '--migration-profile'], text=True).strip() != R3_BASE_MIGRATION_PROFILE + (' testing' if fixture_only else ' release'):
         raise ValueError('helper is not pinned R3 base migration')
     # The production helper enforces the original extension ID and exact capability shape.
     with tempfile.TemporaryDirectory(prefix='crowd-participant-package-') as temporary:
@@ -80,7 +82,6 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
         subprocess.run([str(helper), '--check-install', str(directory)], check=True, capture_output=True)
     archive_name = f'crowd-v{version}-participant-extension.zip'
     helper_name = 'crowd-v4-participant-updater'
-    helper_bytes = helper.read_bytes()
     # Reconnect ZIPs omit runtime; capability belongs to their checksum-pinned helper.
     supports_pro = all(verb in helper_bytes for verb in (b'pro_hello', b'pro_start', b'pro_status', b'pro_stop'))
     native_protocol = 'participant_pro_v2' if supports_pro else 'ota_only'
