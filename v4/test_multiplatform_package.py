@@ -37,6 +37,8 @@ class PackageTest(unittest.TestCase):
                 names = set(package.namelist())
                 self.assertEqual(package.read('多平台采集/dashboard.py'), b'committed dashboard.py')
                 self.assertEqual(package.read('多平台采集/extra_runtime.py'), b'committed extra')
+                for name in ('run_diagnostics.py', 'install_machine_node.py', 'prepare_machine_node.py'):
+                    self.assertEqual(package.read('多平台采集/' + name), ('committed ' + name).encode())
                 self.assertEqual(package.read('多平台采集/SOURCE-COMMIT.txt'), (commit + '\n').encode())
                 self.assertFalse(any('test_' in name or 'fixtures/' in name or
                                      'cloud-config' in name or 'untracked' in name for name in names))

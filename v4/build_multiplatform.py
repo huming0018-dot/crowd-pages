@@ -17,7 +17,9 @@ METADATA = {
 }
 REQUIRED = {
     'dashboard.py', 'dashboard.html', 'mc_runner.py', 'cloud_sync.py',
-    'owner_tasks.py', 'account_sessions.py', '打开工作台.command', 'README.md',
+    'owner_tasks.py', 'account_sessions.py', 'run_diagnostics.py',
+    'install_machine_node.py', 'prepare_machine_node.py',
+    '打开工作台.command', 'README.md',
     'analysis-ui.js', 'owner-ui.js', 'results-ui.js', 'media-ui.js',
     'accounts-ui.js', 'cloud-ui.js', 'fleet-ui.js',
     'node-capabilities-ui.js', 'knowledge-ui.js',
@@ -28,7 +30,7 @@ def runtime_file(name):
     if name.startswith('test_') or name.endswith(('_test.py', '_test.js', '_test.mjs')):
         return False
     if name.endswith('.py'):
-        return not name.startswith(('probe_', 'install_', 'prepare_')) and name != 'run_diagnostics.py'
+        return not name.startswith('probe_')
     return name.endswith(('.js', '.mjs')) or name in METADATA | {'dashboard.html', '打开工作台.command', 'README.md'}
 
 
