@@ -138,7 +138,8 @@ def build(extension, helper, output, pro_runtime=None, r3_base_migration=False, 
         guide = guide.replace('已有标准安装会自动接续，不需要重装扩展。', '本包仅用于全新安装；发现旧安装会停止。').replace('已有标准参与者安装会接续原目录和身份。', '本包发现已有标准参与者安装会拒绝覆盖，并保留原目录和身份。')
     errors = {
         'os': ('这台 Mac 的系统版本还不够', '本包需要 macOS 14 或更新系统。此次未安装，请先更新系统或联系邀请人。'),
-        'chrome': ('请先安装或更新 Google Chrome', '没有安装 Chrome：先从 <a href="https://www.google.com/chrome/" rel="noreferrer" target="_blank">Google 官网下载安装</a>。已经安装：打开 Chrome 菜单中的“关于 Google Chrome”完成更新，需达到120或更新版本。完成后重新双击“开始安装.command”。'),
+        'chrome': ('Google Chrome 尚未就绪', '没有 Chrome 时安装器会自动下载到当前用户的 Applications。下载、挂载或复制失败时，请检查网络和磁盘空间后重新双击“开始安装.command”；仍失败可从 <a href="https://www.google.com/chrome/" rel="noreferrer" target="_blank">Google 官网下载安装</a>。已有旧版 Chrome 请在 Chrome 菜单中的“关于 Google Chrome”更新到120或更新版本，再重试。'),
+        'native-host': ('Chrome 助手目录尚未就绪', '安装器会为当前用户预建 Chrome 助手目录。若目录被符号链接、其他文件或旧注册占用，本次会停止以保护原安装；请把安装窗口最后的提示交给邀请人核对。'),
         'integrity': ('安装包没有完整解压，或校验未通过', '重新从邀请人提供的地址下载，完整解压整个包。不要移动其中单个文件；原安装未覆盖。'),
         'existing': ('找到了原安装，需要先接续', '原目录和更新助手记录不完整。为保护原身份，本次没有覆盖。请把终端最后的提示交给邀请人核对。'),
         'incompatible': ('原版本需要使用对应的更新方式', '原扩展的权限或文件与标准参与者版不兼容（例如旧 KOL 版）。已经保留原样，请联系邀请人；不要卸载或清数据。'),

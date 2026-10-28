@@ -24,9 +24,25 @@ cd "$PACKAGE_DIR"
 INSTALL_NONCE="$$-$RANDOM-$RANDOM"
 INSTALL_CREATED=false
 INSTALL_SUCCESS=false
+CHROME_WORK_DIR=''
+CHROME_MOUNT_POINT=''
+CHROME_TARGET=''
+CHROME_TARGET_INODE=''
+CHROME_INSTALLED=false
 FAILURE_PAGE="$PACKAGE_DIR/help.html"
 cleanup() {
   local install_exit=$?
+  if [[ "$CHROME_INSTALLED" != true && -n "$CHROME_TARGET_INODE" && ! -L "$CHROME_TARGET" && -d "$CHROME_TARGET" ]]; then
+    if [[ "$(/usr/bin/stat -f '%d:%i' "$CHROME_TARGET" 2>/dev/null || true)" == "$CHROME_TARGET_INODE" ]]; then
+      /bin/rm -rf -- "$CHROME_TARGET"
+    fi
+  fi
+  if [[ -n "$CHROME_MOUNT_POINT" ]]; then
+    /usr/bin/hdiutil detach -quiet "$CHROME_MOUNT_POINT" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$CHROME_WORK_DIR" && ! -L "$CHROME_WORK_DIR" && -d "$CHROME_WORK_DIR" ]]; then
+    /bin/rm -rf -- "$CHROME_WORK_DIR"
+  fi
   if [[ "$INSTALL_CREATED" == true && "$INSTALL_SUCCESS" != true && ! -L "$INSTALL_DIR" && -d "$INSTALL_DIR" ]]; then
     if [[ "$(/usr/bin/stat -f '%d:%i' "$INSTALL_DIR")" == "$INSTALL_INODE" && -f "$INSTALL_DIR/.crowd-install-owner" && "$(/bin/cat "$INSTALL_DIR/.crowd-install-owner")" == "$INSTALL_NONCE" ]]; then
       /bin/rm -rf -- "$INSTALL_DIR"
@@ -117,7 +133,42 @@ if [[ -z "$CHROME_APP" ]]; then
   done < <(/usr/bin/mdfind 'kMDItemCFBundleIdentifier == "com.google.Chrome"' 2>/dev/null)
 fi
 if [[ -z "$CHROME_APP" ]]; then
-  fail chrome '没有找到 Google Chrome。请先安装 Chrome，再双击“开始安装.command”。'
+  CHROME_TARGET="$HOME/Applications/Google Chrome.app"
+  if [[ -e "$CHROME_TARGET" || -L "$CHROME_TARGET" || -L "$HOME/Applications" || ( -e "$HOME/Applications" && ! -d "$HOME/Applications" ) ]]; then
+    fail chrome 'Chrome 安装位置已被占用或不可用；没有覆盖现有文件。请检查后重新双击“开始安装.command”，仍失败可从 Google 官网安装。'
+  fi
+  print '未找到 Google Chrome，正在从 Google 官方下载并安装到当前用户的 Applications…'
+  if ! CHROME_WORK_DIR="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/crowd-chrome.XXXXXXXX")"; then
+    fail chrome '无法准备 Chrome 临时目录。请重新双击“开始安装.command”；仍失败可从 Google 官网安装。'
+  fi
+  CHROME_MOUNT_POINT="$CHROME_WORK_DIR/mount"
+  /bin/mkdir "$CHROME_MOUNT_POINT"
+  if ! /usr/bin/curl --fail --location --show-error --silent --retry 2 --connect-timeout 20 --proto '=https' --proto-redir '=https' --output "$CHROME_WORK_DIR/googlechrome.dmg" 'https://dl.google.com/chrome/mac/universal/stable/GGRO/googlechrome.dmg'; then
+    fail chrome 'Chrome 官方下载失败。请检查网络后重新双击“开始安装.command”；仍失败可从 Google 官网安装。'
+  fi
+  if ! /usr/bin/hdiutil attach -quiet -noautoopen -readonly -mountpoint "$CHROME_MOUNT_POINT" "$CHROME_WORK_DIR/googlechrome.dmg"; then
+    fail chrome 'Chrome 安装镜像无法挂载。请重新双击“开始安装.command”；仍失败可从 Google 官网安装。'
+  fi
+  CHROME_SOURCE="$CHROME_MOUNT_POINT/Google Chrome.app"
+  CHROME_SOURCE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CHROME_SOURCE/Contents/Info.plist" 2>/dev/null || true)"
+  CHROME_SOURCE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$CHROME_SOURCE/Contents/Info.plist" 2>/dev/null || true)"
+  CHROME_SOURCE_MAJOR="${CHROME_SOURCE_VERSION%%.*}"
+  if [[ ! -d "$CHROME_SOURCE" || -L "$CHROME_SOURCE" || "$CHROME_SOURCE_ID" != com.google.Chrome || "$CHROME_SOURCE_MAJOR" != <-> ]] || (( CHROME_SOURCE_MAJOR < 120 )); then
+    fail chrome '下载的镜像没有可用的 Chrome 120 或更新版本。请重新双击“开始安装.command”；仍失败可从 Google 官网安装。'
+  fi
+  if [[ ! -d "$HOME/Applications" ]] && ! /bin/mkdir -m 700 "$HOME/Applications"; then
+    fail chrome '无法创建当前用户的 Applications 目录。请重新双击“开始安装.command”；仍失败可从 Google 官网安装。'
+  fi
+  if ! /bin/mkdir -m 755 "$CHROME_TARGET"; then
+    fail chrome 'Chrome 安装位置已经存在；没有覆盖原文件。请重新双击“开始安装.command”；仍失败可从 Google 官网安装。'
+  fi
+  CHROME_TARGET_INODE="$(/usr/bin/stat -f '%d:%i' "$CHROME_TARGET")"
+  if ! /usr/bin/ditto "$CHROME_SOURCE" "$CHROME_TARGET" || [[ ! -f "$CHROME_TARGET/Contents/Info.plist" ]]; then
+    fail chrome '复制 Chrome 失败；本次创建的不完整目录会清理。请重新双击“开始安装.command”；仍失败可从 Google 官网安装。'
+  fi
+  CHROME_INSTALLED=true
+  CHROME_APP="$CHROME_TARGET"
+  print 'Google Chrome 已装入当前用户的 Applications，继续准备扩展和助手。'
 fi
 CHROME_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$CHROME_APP/Contents/Info.plist" 2>/dev/null || true)"
 CHROME_MAJOR="${CHROME_VERSION%%.*}"
@@ -185,6 +236,21 @@ INSTALL_INODE="$(/usr/bin/stat -f '%d:%i' "$INSTALL_DIR")"
 print -r -- "$INSTALL_NONCE" > "$INSTALL_DIR/.crowd-install-owner"
 INSTALL_CREATED=true
 /usr/bin/unzip -q @EXTENSION_ARCHIVE@ -d "$INSTALL_DIR"
+# The ordinary shell can prepare Chrome's native-host directory before the helper registers itself.
+NATIVE_HOSTS="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+for native_path in "$HOME/Library" "$HOME/Library/Application Support" "$HOME/Library/Application Support/Google" "$HOME/Library/Application Support/Google/Chrome" "$NATIVE_HOSTS"; do
+  if [[ -e "$native_path" || -L "$native_path" ]]; then
+    if [[ -L "$native_path" || ! -d "$native_path" || "$(/usr/bin/stat -f '%u' "$native_path" 2>/dev/null || true)" != "$EUID" ]]; then
+      fail native-host 'Chrome 助手目录含符号链接、非目录或非当前用户所有；本次没有覆盖原文件，请联系邀请人核对。'
+    fi
+  fi
+done
+if ! /bin/mkdir -m 700 -p "$NATIVE_HOSTS"; then
+  fail native-host '无法准备 Chrome 助手目录；本次未注册助手。请重新双击“开始安装.command”，仍失败请联系邀请人。'
+fi
+if [[ -L "$NATIVE_HOSTS" || ! -d "$NATIVE_HOSTS" || "$(/usr/bin/stat -f '%u' "$NATIVE_HOSTS" 2>/dev/null || true)" != "$EUID" || -e "$NATIVE_HOSTS/com.crowd.v4.updater.json" || -L "$NATIVE_HOSTS/com.crowd.v4.updater.json" ]]; then
+  fail native-host 'Chrome 助手目录中已有注册文件或目录状态已变化；本次没有覆盖，请联系邀请人核对。'
+fi
 if ! ./crowd-v4-participant-updater --install "$INSTALL_DIR" 'Google Chrome'; then
   fail busy '系统未能完成助手安装。请保留终端错误并联系邀请人；不要删除原扩展或关闭系统保护。'
 fi
