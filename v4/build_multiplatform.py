@@ -3,6 +3,8 @@
 import argparse
 import hashlib
 import io
+import json
+from owner_runtime import prepared_runtime
 from pathlib import Path
 import subprocess
 import tarfile
@@ -54,8 +56,14 @@ def committed_files(source, revision):
     return commit, files
 
 
-def build(source, output, revision='HEAD'):
+def build(source, output, revision='HEAD', runtime=None, architecture=None):
+    runtime_files, runtime_metadata = prepared_runtime(runtime, architecture)
     commit, files = committed_files(source, revision)
+    modes = {name: 0o755 if name.endswith('.command') else 0o644 for name in files}
+    for name, (data, mode) in runtime_files.items():
+        files['runtime/' + name] = data
+        modes['runtime/' + name] = mode
+    files['RUNTIME.json'] = (json.dumps(runtime_metadata, indent=2) + '\n').encode()
     files['SOURCE-COMMIT.txt'] = (commit + '\n').encode()
     files['SHA256SUMS.txt'] = ''.join(
         hashlib.sha256(data).hexdigest() + '  ' + name + '\n'
@@ -70,7 +78,7 @@ def build(source, output, revision='HEAD'):
         for name, data in sorted(files.items()):
             info = zipfile.ZipInfo('多平台采集/' + name, (2026, 10, 28, 0, 0, 0))
             info.create_system = 3
-            info.external_attr = (0o100755 if name.endswith('.command') else 0o100644) << 16
+            info.external_attr = (0o100000 | modes.get(name, 0o644)) << 16
             info.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(info, data)
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
@@ -84,5 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--revision', default='HEAD')
+    parser.add_argument('--runtime', type=Path, required=True, help='prepared relocatable CPython tree')
+    parser.add_argument('--architecture', choices=('arm64', 'x86_64'), required=True)
     args = parser.parse_args()
-    build(args.source, args.output, args.revision)
+    build(args.source, args.output, args.revision, args.runtime, args.architecture)
